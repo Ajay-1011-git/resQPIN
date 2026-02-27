@@ -27,6 +27,8 @@ class _FishermanModeScreenState extends State<FishermanModeScreen> {
   String? _weatherError;
   String _selectedSeverity = 'MEDIUM';
   Timer? _weatherTimer;
+  double? _lat;
+  double? _lon;
 
   final List<String> _subcategories = kSubcategories['FISHERMAN']!;
 
@@ -54,6 +56,8 @@ class _FishermanModeScreenState extends State<FishermanModeScreen> {
     });
     try {
       final pos = await _locationService.getCurrentPosition();
+      _lat = pos.latitude;
+      _lon = pos.longitude;
       final data = await WeatherService.getWeatherAndMarine(
         pos.latitude,
         pos.longitude,
@@ -233,6 +237,28 @@ class _FishermanModeScreenState extends State<FishermanModeScreen> {
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Location coordinates
+                              if (_lat != null && _lon != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.my_location,
+                                        size: 14,
+                                        color: Color(0xFF4DD0E1),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '${_lat!.toStringAsFixed(4)}°N, ${_lon!.toStringAsFixed(4)}°E',
+                                        style: const TextStyle(
+                                          color: Color(0xFF4DD0E1),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               // Weather header
                               Row(
                                 children: [

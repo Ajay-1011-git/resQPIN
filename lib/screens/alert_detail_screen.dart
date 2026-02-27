@@ -3,10 +3,10 @@ import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/sos_model.dart';
 import '../models/user_model.dart';
+import '../models/officer_location_model.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
 import '../constants.dart';
-import '../utils/map_styles.dart';
 
 class AlertDetailScreen extends StatefulWidget {
   final SOSModel sos;
@@ -59,6 +59,26 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
           _attended = true;
           _showMap = true;
         });
+
+        // Start writing officer location to Firestore so public can track
+        _locationService.startLocationUpdates(
+          onLocationChanged: (position) {
+            if (mounted) {
+              setState(
+                () =>
+                    _officerPos = LatLng(position.latitude, position.longitude),
+              );
+            }
+            _firestoreService.updateOfficerLocation(
+              OfficerLocationModel(
+                officerId: widget.officerUser.uid,
+                lat: position.latitude,
+                lon: position.longitude,
+                updatedAt: DateTime.now(),
+              ),
+            );
+          },
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Alert assigned to you!'),
@@ -184,7 +204,6 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                     ),
                     markers: _buildMarkers(),
                     polylines: _buildRoute(),
-                    style: MapStyles.darkStyle,
                     onMapCreated: (controller) {
                       if (_officerPos != null) {
                         final bounds = LatLngBounds(

@@ -89,6 +89,24 @@ class FirestoreService {
   }
 
   /// Atomic attend — using Firestore transaction to prevent duplicate assignment
+  ///
+  /// Stream ASSIGNED SOS alerts for a specific officer (for re-login visibility)
+  Stream<List<SOSModel>> streamAssignedSOSByOfficer(String officerId) {
+    return _db
+        .collection('sos')
+        .where('assignedOfficerId', isEqualTo: officerId)
+        .where('status', isEqualTo: 'ASSIGNED')
+        .snapshots()
+        .map((snap) {
+          final list = snap.docs
+              .map((d) => SOSModel.fromMap(d.data()))
+              .toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
+  }
+
+  /// Atomic attend — using Firestore transaction to prevent duplicate assignment
   Future<bool> attendSOS({
     required String sosId,
     required String officerId,

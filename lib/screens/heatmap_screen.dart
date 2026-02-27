@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../utils/map_styles.dart';
 
 /// Comprehensive distributed crime heatmap using MOSPI 2007 data.
 ///
@@ -266,7 +265,6 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                 zoom: 4.8,
               ),
               circles: _buildCircles(),
-              style: MapStyles.darkStyle,
               mapType: MapType.normal,
               myLocationEnabled: false,
               zoomControlsEnabled: true,

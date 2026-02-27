@@ -178,8 +178,8 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
                               const SizedBox(height: 4),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 3,
+                                  horizontal: 8,
+                                  vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
                                   color: departmentColor.withValues(alpha: 0.2),
@@ -189,9 +189,8 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
                                   _user?.department ?? '',
                                   style: TextStyle(
                                     color: departmentColor,
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    letterSpacing: 1,
                                   ),
                                 ),
                               ),
@@ -200,22 +199,30 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    // Isolated clock — only this rebuilds every second
+                    const SizedBox(height: 16),
                     _OfficerClock(color: departmentColor),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-
-              // ─── Open Alerts Header ───────────────────────────────
+              const SizedBox(height: 16),
               Row(
                 children: [
-                  Text(
-                    'Open Alerts',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  const Icon(
+                    Icons.warning_amber,
+                    size: 20,
+                    color: Colors.orangeAccent,
                   ),
                   const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Live Alerts',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -238,207 +245,269 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
               ),
               const SizedBox(height: 12),
 
-              // ─── Alert List ───────────────────────────────────────
+              // ─── Alert List: ASSIGNED (my) + OPEN ──────────────────
               Expanded(
                 child: StreamBuilder<List<SOSModel>>(
-                  stream: _firestoreService.streamOpenSOSByType(
-                    _sosTypeForDepartment,
+                  stream: _firestoreService.streamAssignedSOSByOfficer(
+                    FirebaseAuth.instance.currentUser!.uid,
                   ),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Text(
-                            'Error loading alerts:\n${snapshot.error}',
-                            style: const TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      );
-                    }
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final alerts = snapshot.data ?? [];
-                    if (alerts.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline,
-                              size: 60,
-                              color: Colors.grey.shade700,
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'No open alerts',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 16,
+                  builder: (context, assignedSnap) {
+                    return StreamBuilder<List<SOSModel>>(
+                      stream: _firestoreService.streamOpenSOSByType(
+                        _sosTypeForDepartment,
+                      ),
+                      builder: (context, openSnap) {
+                        if (openSnap.hasError || assignedSnap.hasError) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Text(
+                                'Error loading alerts:\n${openSnap.error ?? assignedSnap.error}',
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 12,
+                                ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      itemCount: alerts.length,
-                      itemBuilder: (context, i) {
-                        final alert = alerts[i];
-                        final severityColor =
-                            kSeverityColors[alert.severity] ??
-                            Colors.orangeAccent;
-                        String distanceText = '';
-                        if (_myLat != null && _myLon != null) {
-                          final d = LocationService.calculateDistance(
-                            _myLat!,
-                            _myLon!,
-                            alert.lat,
-                            alert.lon,
                           );
-                          distanceText = LocationService.formatDistance(d);
+                        }
+                        if (openSnap.connectionState ==
+                                ConnectionState.waiting &&
+                            assignedSnap.connectionState ==
+                                ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AlertDetailScreen(
-                                  sos: alert,
-                                  officerUser: _user!,
+                        final myAlerts = assignedSnap.data ?? [];
+                        final openAlerts = openSnap.data ?? [];
+
+                        if (myAlerts.isEmpty && openAlerts.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.check_circle_outline,
+                                  size: 60,
+                                  color: Colors.grey.shade700,
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'No open alerts',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        // Combine: my assigned alerts first, then open
+                        final allAlerts = [...myAlerts, ...openAlerts];
+                        final myAlertIds = myAlerts.map((a) => a.sosId).toSet();
+
+                        return ListView.builder(
+                          itemCount: allAlerts.length,
+                          itemBuilder: (context, i) {
+                            final alert = allAlerts[i];
+                            final isMyAlert = myAlertIds.contains(alert.sosId);
+                            final severityColor =
+                                kSeverityColors[alert.severity] ??
+                                Colors.orangeAccent;
+                            String distanceText = '';
+                            if (_myLat != null && _myLon != null) {
+                              final d = LocationService.calculateDistance(
+                                _myLat!,
+                                _myLon!,
+                                alert.lat,
+                                alert.lon,
+                              );
+                              distanceText = LocationService.formatDistance(d);
+                            }
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AlertDetailScreen(
+                                      sos: alert,
+                                      officerUser: _user!,
+                                    ),
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 4,
+                                        height: 56,
+                                        decoration: BoxDecoration(
+                                          color: isMyAlert
+                                              ? Colors.greenAccent
+                                              : severityColor,
+                                          borderRadius: BorderRadius.circular(
+                                            2,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    alert.subCategory ??
+                                                        alert.type,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                if (isMyAlert)
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 3,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.greenAccent
+                                                          .withValues(
+                                                            alpha: 0.15,
+                                                          ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                    ),
+                                                    child: const Text(
+                                                      'ASSIGNED TO YOU',
+                                                      style: TextStyle(
+                                                        color:
+                                                            Colors.greenAccent,
+                                                        fontSize: 9,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  )
+                                                else
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 3,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: severityColor
+                                                          .withValues(
+                                                            alpha: 0.15,
+                                                          ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      alert.severity,
+                                                      style: TextStyle(
+                                                        color: severityColor,
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.access_time,
+                                                  size: 14,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  DateFormat(
+                                                    'HH:mm',
+                                                  ).format(alert.createdAt),
+                                                  style: const TextStyle(
+                                                    color: Colors.grey,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                if (distanceText
+                                                    .isNotEmpty) ...[
+                                                  const SizedBox(width: 16),
+                                                  Icon(
+                                                    Icons.place,
+                                                    size: 14,
+                                                    color: Colors.grey.shade500,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    distanceText,
+                                                    style: const TextStyle(
+                                                      color: Colors.grey,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                                if (alert.silent) ...[
+                                                  const SizedBox(width: 16),
+                                                  const Icon(
+                                                    Icons.volume_off,
+                                                    size: 14,
+                                                    color: Colors.redAccent,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  const Text(
+                                                    'SILENT',
+                                                    style: TextStyle(
+                                                      color: Colors.redAccent,
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 4,
-                                    height: 56,
-                                    decoration: BoxDecoration(
-                                      color: severityColor,
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                alert.subCategory ?? alert.type,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 3,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: severityColor.withValues(
-                                                  alpha: 0.15,
-                                                ),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                alert.severity,
-                                                style: TextStyle(
-                                                  color: severityColor,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.access_time,
-                                              size: 14,
-                                              color: Colors.grey.shade500,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              DateFormat(
-                                                'HH:mm',
-                                              ).format(alert.createdAt),
-                                              style: const TextStyle(
-                                                color: Colors.grey,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            if (distanceText.isNotEmpty) ...[
-                                              const SizedBox(width: 16),
-                                              Icon(
-                                                Icons.place,
-                                                size: 14,
-                                                color: Colors.grey.shade500,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                distanceText,
-                                                style: const TextStyle(
-                                                  color: Colors.grey,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                            if (alert.silent) ...[
-                                              const SizedBox(width: 16),
-                                              const Icon(
-                                                Icons.volume_off,
-                                                size: 14,
-                                                color: Colors.redAccent,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              const Text(
-                                                'SILENT',
-                                                style: TextStyle(
-                                                  color: Colors.redAccent,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                            );
+                          },
                         );
                       },
                     );

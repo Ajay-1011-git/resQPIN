@@ -5,7 +5,6 @@ import '../models/sos_model.dart';
 import '../models/officer_location_model.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
-import '../utils/map_styles.dart';
 
 class SOSTrackingScreen extends StatefulWidget {
   final String sosId;
@@ -150,7 +149,6 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
                     zoom: 15,
                   ),
                   markers: _buildMarkers(),
-                  style: MapStyles.darkStyle,
                   onMapCreated: (controller) {
                     _mapController = controller;
                   },
