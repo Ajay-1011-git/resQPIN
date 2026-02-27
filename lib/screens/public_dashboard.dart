@@ -44,6 +44,7 @@ class _PublicDashboardState extends State<PublicDashboard> {
   StreamSubscription? _familyAlertSub;
   final Set<String> _notifiedSOSIds =
       {}; // Track which SOS we already notified for
+  final Set<String> _dismissedSOSIds = {}; // Family alerts dismissed by user
 
   @override
   void initState() {
@@ -64,6 +65,13 @@ class _PublicDashboardState extends State<PublicDashboard> {
   /// Triggered by volume triple-press — auto-record audio + send POLICE HIGH alert
   Future<void> _onPanicTriggered() async {
     if (_user == null || _isPanicRecording) return;
+
+    // Check for active SOS first
+    final activeSOS = await _firestoreService.getActiveSOSForUser(_user!.uid);
+    if (activeSOS != null) {
+      if (mounted) _navigateToTracking(activeSOS);
+      return;
+    }
 
     // Start audio recording
     final started = await _panicService.startRecording();
@@ -134,6 +142,14 @@ class _PublicDashboardState extends State<PublicDashboard> {
   }
 
   Future<void> _triggerSOS(String sosType, {bool silent = false}) async {
+    // ── Single-alert limit ──────────────────────────────────────
+    final activeSOS = await _firestoreService.getActiveSOSForUser(_user!.uid);
+    if (activeSOS != null) {
+      _showError('You already have an active alert. Resolve it first.');
+      _navigateToTracking(activeSOS);
+      return;
+    }
+
     if (silent) {
       _showLoadingDialog('Sending silent alert...');
       try {
@@ -305,17 +321,22 @@ class _PublicDashboardState extends State<PublicDashboard> {
 
               // ─── Family Alert Banner ──────────────────────────────
               if (_familyAlerts.isNotEmpty)
-                ..._familyAlerts.map(
-                  (alert) => _FamilyAlertBanner(
-                    alert: alert,
-                    onTrack: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => FamilyTrackingScreen(sos: alert),
+                ..._familyAlerts
+                    .where((a) => !_dismissedSOSIds.contains(a.sosId))
+                    .map(
+                      (alert) => _FamilyAlertBanner(
+                        alert: alert,
+                        onTrack: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FamilyTrackingScreen(sos: alert),
+                          ),
+                        ),
+                        onDismiss: () {
+                          setState(() => _dismissedSOSIds.add(alert.sosId));
+                        },
                       ),
                     ),
-                  ),
-                ),
 
               // ─── User Info Card ──────────────────────────────────
               Container(
@@ -592,8 +613,13 @@ class _PublicDashboardState extends State<PublicDashboard> {
 class _FamilyAlertBanner extends StatelessWidget {
   final SOSModel alert;
   final VoidCallback onTrack;
+  final VoidCallback onDismiss;
 
-  const _FamilyAlertBanner({required this.alert, required this.onTrack});
+  const _FamilyAlertBanner({
+    required this.alert,
+    required this.onTrack,
+    required this.onDismiss,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -611,42 +637,60 @@ class _FamilyAlertBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          const Icon(Icons.warning_amber, color: Colors.redAccent, size: 28),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '⚠️ ${alert.createdByName ?? "Family member"} needs help!',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${alert.type} — ${alert.subCategory ?? ""}',
-                  style: TextStyle(color: typeColor, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            onPressed: onTrack,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber,
+                color: Colors.redAccent,
+                size: 28,
               ),
-            ),
-            child: const Text(
-              'TRACK',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '⚠️ ${alert.createdByName ?? "Family member"} needs help!',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${alert.type} — ${alert.subCategory ?? ""}',
+                      style: TextStyle(color: typeColor, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              // Close/dismiss button
+              GestureDetector(
+                onTap: onDismiss,
+                child: const Icon(Icons.close, color: Colors.grey, size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onTrack,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: const Icon(Icons.navigation, size: 18),
+              label: const Text(
+                'TRACK & NAVIGATE',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
             ),
           ),
         ],

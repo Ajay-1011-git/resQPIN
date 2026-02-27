@@ -43,6 +43,29 @@ class FirestoreService {
     await _db.collection('sos').doc(sos.sosId).set(sos.toMap());
   }
 
+  /// Check if user already has an active (OPEN or ASSIGNED) SOS
+  Future<SOSModel?> getActiveSOSForUser(String uid) async {
+    final openQuery = await _db
+        .collection('sos')
+        .where('createdBy', isEqualTo: uid)
+        .where('status', isEqualTo: 'OPEN')
+        .limit(1)
+        .get();
+    if (openQuery.docs.isNotEmpty) {
+      return SOSModel.fromMap(openQuery.docs.first.data());
+    }
+    final assignedQuery = await _db
+        .collection('sos')
+        .where('createdBy', isEqualTo: uid)
+        .where('status', isEqualTo: 'ASSIGNED')
+        .limit(1)
+        .get();
+    if (assignedQuery.docs.isNotEmpty) {
+      return SOSModel.fromMap(assignedQuery.docs.first.data());
+    }
+    return null;
+  }
+
   /// Stream SOS alerts for a public user
   Stream<List<SOSModel>> streamUserSOS(String uid) {
     return _db

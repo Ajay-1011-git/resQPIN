@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/sos_model.dart';
 import '../models/user_model.dart';
 import '../models/officer_location_model.dart';
@@ -43,6 +44,8 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     _loadMyLocation();
     _startSOSStream();
     _startFamilyRespondersStream();
+    // Auto-start tracking immediately
+    _autoStartTracking();
   }
 
   @override
@@ -107,6 +110,15 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     } catch (_) {}
   }
 
+  /// Auto-starts tracking when the screen opens
+  Future<void> _autoStartTracking() async {
+    // Wait for location to load
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (_myPos != null && !_isTracking && mounted) {
+      await _startTracking();
+    }
+  }
+
   Future<void> _startTracking() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final user = await _firestoreService.getUser(uid);
@@ -138,7 +150,57 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
       },
     );
 
-    setState(() => _isTracking = true);
+    if (mounted) setState(() => _isTracking = true);
+  }
+
+  /// Launch Google Maps with turn-by-turn navigation to SOS location
+  Future<void> _launchNavigation() async {
+    final sos = _currentSOS ?? widget.sos;
+    final url = Uri.parse('google.navigation:q=${sos.lat},${sos.lon}&mode=d');
+    final fallback = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${sos.lat},${sos.lon}&travelmode=driving',
+    );
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      await launchUrl(fallback, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  /// Dismiss alert — go back to dashboard
+  void _dismissAlert() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2C),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Dismiss Alert?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'You will stop tracking this alert. The officer will continue responding independently.',
+          style: TextStyle(color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              _locationService.stopLocationUpdates();
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Go back to dashboard
+            },
+            child: const Text(
+              'Dismiss',
+              style: TextStyle(color: Colors.orangeAccent),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Set<Marker> _buildMarkers() {
@@ -223,6 +285,14 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
       appBar: AppBar(
         title: const Text('Family Tracking'),
         backgroundColor: typeColor.withValues(alpha: 0.2),
+        actions: [
+          // Dismiss button in app bar
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.orangeAccent),
+            tooltip: 'Dismiss Alert',
+            onPressed: _dismissAlert,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -392,31 +462,64 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                       const SizedBox(height: 12),
                     ],
 
-                    // Track button
-                    if (!_isTracking && sos.status != 'CLOSED')
+                    // ─── Action Buttons ─────────────────────────────────
+                    if (sos.status != 'CLOSED') ...[
+                      // Navigate button — launches Google Maps with turn-by-turn
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton.icon(
-                          onPressed: _myPos == null ? null : _startTracking,
+                          onPressed: _launchNavigation,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00C853),
+                            backgroundColor: const Color(0xFF1565C0),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
                           icon: const Icon(Icons.navigation, size: 22),
                           label: const Text(
-                            'START TRACKING',
+                            'NAVIGATE (Google Maps)',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              letterSpacing: 1.5,
+                              letterSpacing: 1,
                             ),
                           ),
                         ),
                       ),
-                    if (_isTracking)
+                      const SizedBox(height: 10),
+                      // Dismiss button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          onPressed: _dismissAlert,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.orangeAccent),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.orangeAccent,
+                            size: 18,
+                          ),
+                          label: const Text(
+                            'DISMISS ALERT',
+                            style: TextStyle(
+                              color: Colors.orangeAccent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    // Tracking status
+                    if (_isTracking) ...[
+                      const SizedBox(height: 12),
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
@@ -447,6 +550,41 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                           ],
                         ),
                       ),
+                    ],
+
+                    // Resolved state
+                    if (sos.status == 'CLOSED') ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.greenAccent.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: const Column(
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              color: Colors.greenAccent,
+                              size: 36,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'This alert has been resolved',
+                              style: TextStyle(
+                                color: Colors.greenAccent,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
