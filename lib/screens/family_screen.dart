@@ -32,7 +32,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
     setState(() => _isSending = true);
     try {
-      // Find user by unique code
       final targetUser = await _firestoreService.getUserByCode(code);
       if (targetUser == null) {
         _showSnackBar('No user found with code: $code', isError: true);
@@ -43,7 +42,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
         return;
       }
 
-      // Send request
       await _firestoreService.sendFamilyRequest(
         fromUid: uid,
         toUid: targetUser.uid,
@@ -66,6 +64,49 @@ class _FamilyScreenState extends State<FamilyScreen> {
       _showSnackBar('Request accepted!');
     } catch (e) {
       _showSnackBar('Error: $e', isError: true);
+    }
+  }
+
+  Future<void> _removeMember(String memberUid, String memberName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2C),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Remove Family Member',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Remove $memberName from your family list? They will also lose access to your alerts.',
+          style: const TextStyle(color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Remove',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _firestoreService.removeFamilyMember(
+        myUid: uid,
+        memberUid: memberUid,
+      );
+      if (mounted) _showSnackBar('$memberName removed');
+    } catch (e) {
+      if (mounted) _showSnackBar('Error: $e', isError: true);
     }
   }
 
@@ -242,6 +283,18 @@ class _FamilyScreenState extends State<FamilyScreen> {
                                     style: const TextStyle(
                                       color: Colors.grey,
                                       fontSize: 12,
+                                    ),
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(
+                                      Icons.person_remove,
+                                      color: Colors.redAccent,
+                                      size: 22,
+                                    ),
+                                    tooltip: 'Remove member',
+                                    onPressed: () => _removeMember(
+                                      linkedUid,
+                                      user?.name ?? linkedUid,
                                     ),
                                   ),
                                 ),

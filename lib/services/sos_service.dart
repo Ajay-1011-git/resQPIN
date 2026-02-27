@@ -10,7 +10,7 @@ class SOSService {
   final LocationService _locationService = LocationService();
   final Uuid _uuid = const Uuid();
 
-  /// Create a new SOS alert
+  /// Create a new SOS alert — also fetches family member UIDs for notification
   Future<SOSModel> createSOS({
     required String type,
     required String subCategory,
@@ -28,6 +28,13 @@ class SOSService {
       position.longitude,
     );
 
+    // Fetch linked family members for notification
+    List<String> familyUids = [];
+    try {
+      final familyLink = await _firestoreService.getFamilyLink(createdBy);
+      familyUids = familyLink.linkedUsers;
+    } catch (_) {}
+
     // Create SOS model
     final sos = SOSModel(
       sosId: _uuid.v4(),
@@ -42,6 +49,7 @@ class SOSService {
       createdByName: createdByName,
       createdAt: DateTime.now(),
       silent: silent,
+      familyMemberUids: familyUids,
     );
 
     // Save to Firestore

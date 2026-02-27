@@ -17,6 +17,8 @@ class SOSModel {
   final DateTime? assignedAt;
   final DateTime? closedAt;
   final bool silent;
+  final List<String>
+  familyMemberUids; // UIDs of linked family members to notify
 
   SOSModel({
     required this.sosId,
@@ -35,6 +37,7 @@ class SOSModel {
     this.assignedAt,
     this.closedAt,
     this.silent = false,
+    this.familyMemberUids = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -55,6 +58,7 @@ class SOSModel {
       'assignedAt': assignedAt != null ? Timestamp.fromDate(assignedAt!) : null,
       'closedAt': closedAt != null ? Timestamp.fromDate(closedAt!) : null,
       'silent': silent,
+      'familyMemberUids': familyMemberUids,
     };
   }
 
@@ -76,6 +80,7 @@ class SOSModel {
       assignedAt: (map['assignedAt'] as Timestamp?)?.toDate(),
       closedAt: (map['closedAt'] as Timestamp?)?.toDate(),
       silent: map['silent'] ?? false,
+      familyMemberUids: List<String>.from(map['familyMemberUids'] ?? []),
     );
   }
 

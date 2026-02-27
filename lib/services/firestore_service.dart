@@ -44,8 +44,6 @@ class FirestoreService {
   }
 
   /// Stream SOS alerts for a public user
-  /// Note: No orderBy to avoid needing a composite index.
-  /// Sorting is done client-side.
   Stream<List<SOSModel>> streamUserSOS(String uid) {
     return _db
         .collection('sos')
@@ -71,8 +69,6 @@ class FirestoreService {
   }
 
   /// Stream OPEN SOS alerts by type (for officer dashboard)
-  /// Uses only equality filters — no orderBy to avoid composite index requirement.
-  /// Sorting is done client-side.
   Stream<List<SOSModel>> streamOpenSOSByType(String sosType) {
     return _db
         .collection('sos')
@@ -88,8 +84,6 @@ class FirestoreService {
         });
   }
 
-  /// Atomic attend — using Firestore transaction to prevent duplicate assignment
-  ///
   /// Stream ASSIGNED SOS alerts for a specific officer (for re-login visibility)
   Stream<List<SOSModel>> streamAssignedSOSByOfficer(String officerId) {
     return _db
@@ -100,6 +94,23 @@ class FirestoreService {
         .map((snap) {
           final list = snap.docs
               .map((d) => SOSModel.fromMap(d.data()))
+              .toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
+  }
+
+  /// Stream active SOS alerts where current user is a family member
+  /// Uses arrayContains to find SOS documents where familyMemberUids contains this UID
+  Stream<List<SOSModel>> streamFamilySOSAlerts(String uid) {
+    return _db
+        .collection('sos')
+        .where('familyMemberUids', arrayContains: uid)
+        .snapshots()
+        .map((snap) {
+          final list = snap.docs
+              .map((d) => SOSModel.fromMap(d.data()))
+              .where((sos) => sos.status != 'CLOSED')
               .toList();
           list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
           return list;
@@ -162,6 +173,55 @@ class FirestoreService {
     });
   }
 
+  // ─── FAMILY RESPONDERS ──────────────────────────────────────────────────
+
+  /// Add a family responder to an SOS (subcollection: sos/{sosId}/family_responders/{uid})
+  Future<void> addFamilyResponder({
+    required String sosId,
+    required String uid,
+    required String name,
+    required double lat,
+    required double lon,
+  }) async {
+    await _db
+        .collection('sos')
+        .doc(sosId)
+        .collection('family_responders')
+        .doc(uid)
+        .set({
+          'uid': uid,
+          'name': name,
+          'lat': lat,
+          'lon': lon,
+          'updatedAt': Timestamp.now(),
+        });
+  }
+
+  /// Update family responder live location
+  Future<void> updateFamilyResponderLocation({
+    required String sosId,
+    required String uid,
+    required double lat,
+    required double lon,
+  }) async {
+    await _db
+        .collection('sos')
+        .doc(sosId)
+        .collection('family_responders')
+        .doc(uid)
+        .update({'lat': lat, 'lon': lon, 'updatedAt': Timestamp.now()});
+  }
+
+  /// Stream all family responders for an SOS
+  Stream<List<Map<String, dynamic>>> streamFamilyResponders(String sosId) {
+    return _db
+        .collection('sos')
+        .doc(sosId)
+        .collection('family_responders')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => d.data()).toList());
+  }
+
   // ─── FAMILY LINKS ────────────────────────────────────────────────────────
 
   /// Get or create family link
@@ -204,6 +264,25 @@ class FirestoreService {
     });
     batch.update(theirRef, {
       'linkedUsers': FieldValue.arrayUnion([myUid]),
+    });
+
+    await batch.commit();
+  }
+
+  /// Remove a linked family member (both sides)
+  Future<void> removeFamilyMember({
+    required String myUid,
+    required String memberUid,
+  }) async {
+    final batch = _db.batch();
+    final myRef = _db.collection('family_links').doc(myUid);
+    final theirRef = _db.collection('family_links').doc(memberUid);
+
+    batch.update(myRef, {
+      'linkedUsers': FieldValue.arrayRemove([memberUid]),
+    });
+    batch.update(theirRef, {
+      'linkedUsers': FieldValue.arrayRemove([myUid]),
     });
 
     await batch.commit();

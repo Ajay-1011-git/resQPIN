@@ -7,6 +7,8 @@ import '../models/sos_model.dart';
 import '../services/firestore_service.dart';
 import '../services/sos_service.dart';
 import '../services/location_service.dart';
+import '../services/notification_service.dart';
+import '../services/panic_service.dart';
 import '../constants.dart';
 import 'login_screen.dart';
 import 'sos_category_screen.dart';
@@ -14,6 +16,7 @@ import 'sos_confirmation_dialog.dart';
 import 'sos_tracking_screen.dart';
 import 'fisherman_mode_screen.dart';
 import 'family_screen.dart';
+import 'family_tracking_screen.dart';
 import 'heatmap_screen.dart';
 import '../services/auth_service.dart';
 
@@ -29,15 +32,68 @@ class _PublicDashboardState extends State<PublicDashboard> {
   final SOSService _sosService = SOSService();
   final LocationService _locationService = LocationService();
   final AuthService _authService = AuthService();
+  final NotificationService _notificationService = NotificationService();
+  final PanicService _panicService = PanicService();
+  bool _isPanicRecording = false;
 
   UserModel? _user;
   bool _isLoading = true;
+
+  // Family SOS alerts
+  List<SOSModel> _familyAlerts = [];
+  StreamSubscription? _familyAlertSub;
+  final Set<String> _notifiedSOSIds =
+      {}; // Track which SOS we already notified for
 
   @override
   void initState() {
     super.initState();
     _loadUser();
     _locationService.requestPermission();
+    // Initialize panic service (volume triple-press → auto-SOS + recording)
+    _panicService.initialize(onPanicTriggered: _onPanicTriggered);
+  }
+
+  @override
+  void dispose() {
+    _familyAlertSub?.cancel();
+    _panicService.dispose();
+    super.dispose();
+  }
+
+  /// Triggered by volume triple-press — auto-record audio + send POLICE HIGH alert
+  Future<void> _onPanicTriggered() async {
+    if (_user == null || _isPanicRecording) return;
+
+    // Start audio recording
+    final started = await _panicService.startRecording();
+    if (mounted) setState(() => _isPanicRecording = started);
+
+    // Auto-send POLICE HIGH SOS under Violence category
+    try {
+      final sos = await _sosService.createSOS(
+        type: 'POLICE',
+        subCategory: 'Violence — Panic Recording',
+        severity: 'HIGH',
+        createdBy: _user!.uid,
+        createdByName: _user!.name,
+        silent: true,
+      );
+
+      // Auto-stop recording after 60 seconds
+      Future.delayed(const Duration(seconds: 60), () async {
+        await _panicService.stopRecording();
+        if (mounted) setState(() => _isPanicRecording = false);
+      });
+
+      if (mounted) _navigateToTracking(sos);
+    } catch (e) {
+      await _panicService.stopRecording();
+      if (mounted) {
+        setState(() => _isPanicRecording = false);
+        _showError('Panic alert failed: $e');
+      }
+    }
   }
 
   Future<void> _loadUser() async {
@@ -50,7 +106,31 @@ class _PublicDashboardState extends State<PublicDashboard> {
           _isLoading = false;
         });
       }
+
+      // Start listening for family SOS alerts
+      _startFamilySOSListener(uid);
     }
+  }
+
+  void _startFamilySOSListener(String uid) {
+    _familyAlertSub = _firestoreService.streamFamilySOSAlerts(uid).listen((
+      alerts,
+    ) {
+      if (!mounted) return;
+
+      // Trigger local notification for NEW alerts we haven't seen yet
+      for (final alert in alerts) {
+        if (!_notifiedSOSIds.contains(alert.sosId)) {
+          _notifiedSOSIds.add(alert.sosId);
+          _notificationService.showFamilyNotification(
+            memberName: alert.createdByName ?? 'Family member',
+            sosType: alert.subCategory ?? alert.type,
+          );
+        }
+      }
+
+      setState(() => _familyAlerts = alerts);
+    });
   }
 
   Future<void> _triggerSOS(String sosType, {bool silent = false}) async {
@@ -177,6 +257,66 @@ class _PublicDashboardState extends State<PublicDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ─── Panic Recording Banner ───────────────────────────
+              if (_isPanicRecording)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.red.withValues(alpha: 0.4),
+                        Colors.red.withValues(alpha: 0.2),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.red.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.mic, color: Colors.redAccent, size: 24),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          '🔴 RECORDING AUDIO — Panic alert sent',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await _panicService.stopRecording();
+                          if (mounted)
+                            setState(() => _isPanicRecording = false);
+                        },
+                        child: const Text(
+                          'STOP',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // ─── Family Alert Banner ──────────────────────────────
+              if (_familyAlerts.isNotEmpty)
+                ..._familyAlerts.map(
+                  (alert) => _FamilyAlertBanner(
+                    alert: alert,
+                    onTrack: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FamilyTrackingScreen(sos: alert),
+                      ),
+                    ),
+                  ),
+                ),
+
               // ─── User Info Card ──────────────────────────────────
               Container(
                 padding: const EdgeInsets.all(20),
@@ -250,7 +390,6 @@ class _PublicDashboardState extends State<PublicDashboard> {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    // Isolated clock — only this widget rebuilds every second
                     const _LiveClock(),
                   ],
                 ),
@@ -444,6 +583,73 @@ class _PublicDashboardState extends State<PublicDashboard> {
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+// ─── Family Alert Banner ─────────────────────────────────────────────────────
+class _FamilyAlertBanner extends StatelessWidget {
+  final SOSModel alert;
+  final VoidCallback onTrack;
+
+  const _FamilyAlertBanner({required this.alert, required this.onTrack});
+
+  @override
+  Widget build(BuildContext context) {
+    final typeColor = kSOSTypeColors[alert.type] ?? Colors.redAccent;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.red.withValues(alpha: 0.3),
+            typeColor.withValues(alpha: 0.15),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber, color: Colors.redAccent, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '⚠️ ${alert.createdByName ?? "Family member"} needs help!',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${alert.type} — ${alert.subCategory ?? ""}',
+                  style: TextStyle(color: typeColor, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: onTrack,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'TRACK',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            ),
+          ),
+        ],
       ),
     );
   }

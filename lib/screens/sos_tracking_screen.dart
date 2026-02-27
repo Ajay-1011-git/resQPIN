@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/sos_model.dart';
+import '../models/user_model.dart';
 import '../models/officer_location_model.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
@@ -20,11 +21,21 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
   GoogleMapController? _mapController;
   SOSModel? _sos;
   OfficerLocationModel? _officerLocation;
+  UserModel? _officerDetails;
+  List<Map<String, dynamic>> _familyResponders = [];
   StreamSubscription? _officerLocationSub;
+  StreamSubscription? _familyRespondersSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _startFamilyRespondersStream();
+  }
 
   @override
   void dispose() {
     _officerLocationSub?.cancel();
+    _familyRespondersSub?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
@@ -36,7 +47,6 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
         .listen((location) {
           if (mounted && location != null) {
             setState(() => _officerLocation = location);
-            // Animate camera to officer
             _mapController?.animateCamera(
               CameraUpdate.newLatLng(LatLng(location.lat, location.lon)),
             );
@@ -44,9 +54,27 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
         });
   }
 
+  Future<void> _loadOfficerDetails(String officerId) async {
+    final user = await _firestoreService.getUser(officerId);
+    if (mounted && user != null) {
+      setState(() => _officerDetails = user);
+    }
+  }
+
+  void _startFamilyRespondersStream() {
+    _familyRespondersSub = _firestoreService
+        .streamFamilyResponders(widget.sosId)
+        .listen((responders) {
+          if (mounted) {
+            setState(() => _familyResponders = responders);
+          }
+        });
+  }
+
   Set<Marker> _buildMarkers() {
     final markers = <Marker>{};
     if (_sos != null) {
+      // SOS location (red)
       markers.add(
         Marker(
           markerId: const MarkerId('sos_location'),
@@ -56,16 +84,39 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
         ),
       );
     }
+
+    // Officer location (blue)
     if (_officerLocation != null) {
       markers.add(
         Marker(
           markerId: const MarkerId('officer_location'),
           position: LatLng(_officerLocation!.lat, _officerLocation!.lon),
-          infoWindow: InfoWindow(title: _sos?.assignedOfficerName ?? 'Officer'),
+          infoWindow: InfoWindow(
+            title: '🚔 ${_sos?.assignedOfficerName ?? "Officer"}',
+            snippet: _officerDetails?.department ?? '',
+          ),
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
         ),
       );
     }
+
+    // Family responders (green)
+    for (final resp in _familyResponders) {
+      final uid = resp['uid'] as String? ?? '';
+      final lat = (resp['lat'] as num?)?.toDouble() ?? 0;
+      final lon = (resp['lon'] as num?)?.toDouble() ?? 0;
+      markers.add(
+        Marker(
+          markerId: MarkerId('family_$uid'),
+          position: LatLng(lat, lon),
+          infoWindow: InfoWindow(title: '👨‍👩‍👧 ${resp['name'] ?? "Family"}'),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
+        ),
+      );
+    }
+
     return markers;
   }
 
@@ -115,6 +166,7 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
                 _sos?.status != 'ASSIGNED') {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _startOfficerTracking(newSOS.assignedOfficerId!);
+                _loadOfficerDetails(newSOS.assignedOfficerId!);
               });
             }
             _sos = newSOS;
@@ -239,12 +291,27 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
-                              Text(
-                                _sos!.assignedOfficerName ?? 'Officer',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _sos!.assignedOfficerName ?? 'Officer',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (_officerDetails != null)
+                                      Text(
+                                        '${_officerDetails!.department ?? ""} • ${_officerDetails!.phone}',
+                                        style: const TextStyle(
+                                          color: Colors.grey,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -266,6 +333,77 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
                                 ),
                               ],
                             ),
+                        ],
+
+                        // Family responders
+                        if (_familyResponders.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          const Divider(color: Colors.grey),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.family_restroom,
+                                color: Colors.greenAccent,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${_familyResponders.length} family member(s) tracking',
+                                style: const TextStyle(
+                                  color: Colors.greenAccent,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ..._familyResponders.map((resp) {
+                            final name = resp['name'] ?? 'Family';
+                            final lat = (resp['lat'] as num?)?.toDouble() ?? 0;
+                            final lon = (resp['lon'] as num?)?.toDouble() ?? 0;
+                            String respDist = '';
+                            if (_sos != null) {
+                              final d = LocationService.calculateDistance(
+                                _sos!.lat,
+                                _sos!.lon,
+                                lat,
+                                lon,
+                              );
+                              respDist = LocationService.formatDistance(d);
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.person,
+                                    color: Colors.greenAccent,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      name.toString(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  if (respDist.isNotEmpty)
+                                    Text(
+                                      respDist,
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }),
                         ],
 
                         // Response timer (when closed)
