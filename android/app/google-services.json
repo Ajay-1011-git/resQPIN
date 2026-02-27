@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "383124171119",
+    "project_id": "resqpin",
+    "storage_bucket": "resqpin.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:383124171119:android:900c01cf2a2b7d8ec5609a",
+        "android_client_info": {
+          "package_name": "com.example.resqpin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTSC-XWKPaYvfD1tBgq5oVEgqxnuia2jE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
