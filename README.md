@@ -20,22 +20,22 @@ The application serves multiple distinct user personas—citizens in distress, d
 ### System Components
 
 #### 1. Real-Time Telemetry and Tracking
-The core tracking engine utilizes Firestore streams to maintain persistent, bidirectional connections between the citizen, their linked family members, and the responding officer. Upon SOS activation, the system initiates a multi-node tracking session. The application renders these live coordinates on a customized map interface, dynamically calculating and displaying the responder's ETA and distance using the Haversine formula. To prevent alert collision, the data abstraction layer enforces strict limits, ensuring a user maintains only a single active emergency state at a time.
+Bidirectional Firestore streams link citizens, family members, and responding officers. The system renders live coordinates on a custom Google Maps interface, dynamically calculating responder ETAs via the Haversine formula while enforcing strict single-alert limits to prevent data collisions.
 
 #### 2. Hardware-Level Panic Activation
-To ensure accessibility under duress, ResQPIN integrates a discrete hardware trigger. A custom Android FlutterActivity monitors for a volume-down triple-press within a strictly defined 1.5-second temporal window. Upon detection, a MethodChannel invocation signals the Flutter layer to silently dispatch a high-severity police alert while simultaneously initiating a 60-second background audio recording via Android's native MediaRecorder API. This ensures critical evidence is captured purely locally even if the device screen is locked or obscured.
+A custom Android sub-layer monitors for a volume-down triple-press within a 1.5-second window. Upon detection, it silently dispatches a high-severity police alert and initiates a 60-second background audio recording via Android's native MediaRecorder to secure perishable evidence.
 
 #### 3. DIGIPIN Geospatial Encoding
-The platform integrates IndiaPost's DIGIPIN algorithmic framework to convert standard WGS84 latitude and longitude coordinates into a standardized 10-character alphanumeric grid reference. This guarantees unambiguous location relay to emergency services, eliminating the coordinate formatting errors common in traditional dispatch channels.
+Integrates IndiaPost's DIGIPIN algorithmic framework to convert standard WGS84 coordinates into an unambiguous 10-character alphanumeric grid reference, eliminating coordinate formatting errors during dispatch.
 
 #### 4. Specialized Marine Safety Dashboard
-Engineered specifically for maritime operators, the Fisherman Mode interfaces with the Open-Meteo API to parse granular meteorological data including wave heights, swell patterns, and wind gust velocities. The system maps this data against the Indian Meteorological Department (IMD) cyclone classification matrix, automatically issuing tiered, high-priority notifications when conditions exceed safe operational thresholds.
+Interfaces with the Open-Meteo API to parse granular meteorological data (wave heights, swells, wind gusts). The system cross-references this data against the Indian Meteorological Department (IMD) cyclone classification matrix to issue automatic, tiered warnings.
 
 #### 5. Crime Heatmap Visualization
-The application processes historical crime statistics from the Ministry of Statistics and Programme Implementation (MOSPI) to render an interactive density heatmap. This feature utilizes weighted data points distributed across major metropolitan centers to visually delineate high-risk zones, aiding both citizens in route planning and law enforcement in resource allocation.
+Processes historical crime statistics from the Ministry of Statistics and Programme Implementation (MOSPI) to render an interactive density heatmap, visually delineating high-risk zones across major metropolitan centers.
 
 #### 6. Concurrent Multi-Responder Alerting
-The alert pipeline is designed to eliminate single points of failure. When an emergency is triggered, a compound query identifies the assigned officer while simultaneously pushing local, max-priority notification payloads to all cryptographically linked family members. Family members can launch the application to enter a shared tracking session, contributing their live locations to the emergency map instance to facilitate a coordinated rendezvous, while retaining the independence to dismiss alerts locally.
+Upon SOS activation, a compound query dispatches max-priority alerts to assigned officers and all cryptographically linked family members simultaneously. Family members can securely join the tracking session to coordinate independent responses.
 
 ## Real-World Impact
 
