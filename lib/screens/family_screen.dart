@@ -546,6 +546,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
             onPressed: () => _acceptRequest(reqUid),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.ambulanceColor,
+              minimumSize: const Size(0, 0),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),

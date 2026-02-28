@@ -25,21 +25,42 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
   OfficerLocationModel? _officerLocation;
   UserModel? _officerDetails;
   List<Map<String, dynamic>> _familyResponders = [];
+  StreamSubscription? _sosSub;
   StreamSubscription? _officerLocationSub;
   StreamSubscription? _familyRespondersSub;
+  bool _officerTrackingStarted = false;
 
   @override
   void initState() {
     super.initState();
+    _startSOSStream();
     _startFamilyRespondersStream();
   }
 
   @override
   void dispose() {
+    _sosSub?.cancel();
     _officerLocationSub?.cancel();
     _familyRespondersSub?.cancel();
     _mapController?.dispose();
     super.dispose();
+  }
+
+  void _startSOSStream() {
+    _sosSub = _firestoreService.streamSOS(widget.sosId).listen((sos) {
+      if (!mounted || sos == null) return;
+
+      // Start officer tracking when SOS becomes ASSIGNED (only once)
+      if (sos.status == 'ASSIGNED' &&
+          sos.assignedOfficerId != null &&
+          !_officerTrackingStarted) {
+        _officerTrackingStarted = true;
+        _startOfficerTracking(sos.assignedOfficerId!);
+        _loadOfficerDetails(sos.assignedOfficerId!);
+      }
+
+      setState(() => _sos = sos);
+    });
   }
 
   void _startOfficerTracking(String officerId) {
@@ -147,36 +168,13 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
           style: GoogleFonts.inter(fontWeight: FontWeight.w700),
         ),
       ),
-      body: StreamBuilder<SOSModel?>(
-        stream: _firestoreService.streamSOS(widget.sosId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              _sos == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: _sos == null
+          ? const Center(child: CircularProgressIndicator())
+          : _buildBody(),
+    );
+  }
 
-          if (snapshot.data != null) {
-            final newSOS = snapshot.data!;
-            if (newSOS.status == 'ASSIGNED' &&
-                newSOS.assignedOfficerId != null &&
-                _sos?.status != 'ASSIGNED') {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _startOfficerTracking(newSOS.assignedOfficerId!);
-                _loadOfficerDetails(newSOS.assignedOfficerId!);
-              });
-            }
-            _sos = newSOS;
-          }
-
-          if (_sos == null) {
-            return Center(
-              child: Text(
-                'Alert not found',
-                style: GoogleFonts.inter(color: AppTheme.textSecondary),
-              ),
-            );
-          }
-
+  Widget _buildBody() {
           final statusColor = _getStatusColor(_sos!.status);
           String? distance;
           String? eta;
@@ -564,9 +562,6 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
               ),
             ],
           );
-        },
-      ),
-    );
   }
 }
 

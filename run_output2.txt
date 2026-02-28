@@ -1,8 +1,0 @@
-﻿Launching lib\main.dart on SM S911B in debug mode...
-Running Gradle task 'assembleDebug'...                           1267.4s
-ΓêÜ Built build\app\outputs\flutter-apk\app-debug.apk
-adb.exe: device 'RZCX51G0TCJ' not found
-Installing build\app\outputs\flutter-apk\app-debug.apk...           41ms
-Error: ADB exited with exit code 1
-adb.exe: device 'RZCX51G0TCJ' not found
-Error launching application on SM S911B.
