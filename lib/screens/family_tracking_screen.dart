@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../app_theme.dart';
 import '../models/sos_model.dart';
 import '../models/user_model.dart';
 import '../models/officer_location_model.dart';
@@ -11,7 +13,6 @@ import '../services/location_service.dart';
 import '../constants.dart';
 
 /// Screen for family members to track and navigate to an SOS location.
-/// Multiple family members can track simultaneously.
 class FamilyTrackingScreen extends StatefulWidget {
   final SOSModel sos;
 
@@ -44,7 +45,6 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     _loadMyLocation();
     _startSOSStream();
     _startFamilyRespondersStream();
-    // Auto-start tracking immediately
     _autoStartTracking();
   }
 
@@ -61,7 +61,6 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
   void _startSOSStream() {
     _sosSub = _firestoreService.streamSOS(widget.sos.sosId).listen((sos) {
       if (mounted && sos != null) {
-        // Start officer tracking when assigned
         if (sos.status == 'ASSIGNED' &&
             sos.assignedOfficerId != null &&
             _currentSOS?.status != 'ASSIGNED') {
@@ -95,24 +94,18 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     _familyRespondersSub = _firestoreService
         .streamFamilyResponders(widget.sos.sosId)
         .listen((responders) {
-          if (mounted) {
-            setState(() => _familyResponders = responders);
-          }
+          if (mounted) setState(() => _familyResponders = responders);
         });
   }
 
   Future<void> _loadMyLocation() async {
     try {
       final pos = await _locationService.getCurrentPosition();
-      if (mounted) {
-        setState(() => _myPos = LatLng(pos.latitude, pos.longitude));
-      }
+      if (mounted) setState(() => _myPos = LatLng(pos.latitude, pos.longitude));
     } catch (_) {}
   }
 
-  /// Auto-starts tracking when the screen opens
   Future<void> _autoStartTracking() async {
-    // Wait for location to load
     await Future.delayed(const Duration(milliseconds: 1500));
     if (_myPos != null && !_isTracking && mounted) {
       await _startTracking();
@@ -124,7 +117,6 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     final user = await _firestoreService.getUser(uid);
     if (user == null || _myPos == null) return;
 
-    // Register as family responder
     await _firestoreService.addFamilyResponder(
       sosId: widget.sos.sosId,
       uid: uid,
@@ -133,14 +125,12 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
       lon: _myPos!.longitude,
     );
 
-    // Start continuous location updates
     _locationService.startLocationUpdates(
       onLocationChanged: (position) {
-        if (mounted) {
+        if (mounted)
           setState(
             () => _myPos = LatLng(position.latitude, position.longitude),
           );
-        }
         _firestoreService.updateFamilyResponderLocation(
           sosId: widget.sos.sosId,
           uid: uid,
@@ -153,7 +143,6 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     if (mounted) setState(() => _isTracking = true);
   }
 
-  /// Launch Google Maps with turn-by-turn navigation to SOS location
   Future<void> _launchNavigation() async {
     final sos = _currentSOS ?? widget.sos;
     final url = Uri.parse('google.navigation:q=${sos.lat},${sos.lon}&mode=d');
@@ -167,35 +156,43 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     }
   }
 
-  /// Dismiss alert — go back to dashboard
   void _dismissAlert() {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E2C),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Dismiss Alert?',
-          style: TextStyle(color: Colors.white),
+        backgroundColor: AppTheme.surfaceCard.withValues(alpha: 0.95),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppTheme.surfaceBorder),
         ),
-        content: const Text(
+        title: Text(
+          'Dismiss Alert?',
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
           'You will stop tracking this alert. The officer will continue responding independently.',
-          style: TextStyle(color: Colors.grey),
+          style: GoogleFonts.inter(color: AppTheme.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: GoogleFonts.inter()),
           ),
           TextButton(
             onPressed: () {
               _locationService.stopLocationUpdates();
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Go back to dashboard
+              Navigator.pop(context);
+              Navigator.pop(context);
             },
-            child: const Text(
+            child: Text(
               'Dismiss',
-              style: TextStyle(color: Colors.orangeAccent),
+              style: GoogleFonts.inter(
+                color: Colors.orangeAccent,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -207,27 +204,25 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     final markers = <Marker>{};
     final sos = _currentSOS ?? widget.sos;
 
-    // SOS location (red)
     markers.add(
       Marker(
         markerId: const MarkerId('sos_location'),
         position: LatLng(sos.lat, sos.lon),
         infoWindow: InfoWindow(
-          title: '📍 SOS: ${sos.subCategory ?? sos.type}',
+          title: 'SOS: ${sos.subCategory ?? sos.type}',
           snippet: sos.createdByName ?? 'Unknown',
         ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
       ),
     );
 
-    // Officer location (blue)
     if (_officerLocation != null) {
       markers.add(
         Marker(
           markerId: const MarkerId('officer_location'),
           position: LatLng(_officerLocation!.lat, _officerLocation!.lon),
           infoWindow: InfoWindow(
-            title: '🚔 ${sos.assignedOfficerName ?? "Officer"}',
+            title: sos.assignedOfficerName ?? 'Officer',
             snippet: _officerDetails?.department ?? '',
           ),
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
@@ -235,7 +230,6 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
       );
     }
 
-    // Family responders (green) — exclude self
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     for (final resp in _familyResponders) {
       final respUid = resp['uid'] as String? ?? '';
@@ -246,7 +240,7 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
         Marker(
           markerId: MarkerId('family_$respUid'),
           position: LatLng(lat, lon),
-          infoWindow: InfoWindow(title: '👨‍👩‍👧 ${resp['name'] ?? "Family"}'),
+          infoWindow: InfoWindow(title: '${resp['name'] ?? "Family"}'),
           icon: BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueGreen,
           ),
@@ -261,13 +255,8 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
   Widget build(BuildContext context) {
     final sos = _currentSOS ?? widget.sos;
     final typeColor = kSOSTypeColors[sos.type] ?? Colors.blueAccent;
-    final statusColor = sos.status == 'ASSIGNED'
-        ? Colors.blueAccent
-        : sos.status == 'CLOSED'
-        ? Colors.greenAccent
-        : Colors.orangeAccent;
+    final statusColor = AppTheme.statusColor(sos.status);
 
-    // Distance/ETA from SOS
     String? distanceText;
     String? etaText;
     if (_myPos != null) {
@@ -282,11 +271,14 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     }
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Family Tracking'),
-        backgroundColor: typeColor.withValues(alpha: 0.2),
+        backgroundColor: Colors.transparent,
+        title: Text(
+          'Family Tracking',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+        ),
         actions: [
-          // Dismiss button in app bar
           IconButton(
             icon: const Icon(Icons.close, color: Colors.orangeAccent),
             tooltip: 'Dismiss Alert',
@@ -296,7 +288,7 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
       ),
       body: Column(
         children: [
-          // ─── Map ──────────────────────────────────────────────
+          // ─── Map ─────────────────────────────────────────
           Expanded(
             flex: 3,
             child: GoogleMap(
@@ -312,41 +304,53 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
             ),
           ),
 
-          // ─── Info Panel ──────────────────────────────────────
+          // ─── Frosted Info Panel ──────────────────────────
           Expanded(
             flex: 2,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1A1A2E),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              decoration: BoxDecoration(
+                color: AppTheme.bgPrimary,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                border: Border(top: BorderSide(color: AppTheme.surfaceBorder)),
               ),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Status
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Status badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
-                        vertical: 6,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
+                        color: statusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: statusColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
+                          PulsingDot(color: statusColor, size: 6),
                           const SizedBox(width: 8),
                           Text(
                             sos.status == 'ASSIGNED'
@@ -354,10 +358,10 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                                 : sos.status == 'CLOSED'
                                 ? 'Resolved'
                                 : 'Waiting for officer...',
-                            style: TextStyle(
+                            style: GoogleFonts.inter(
                               color: statusColor,
                               fontWeight: FontWeight.w700,
-                              fontSize: 14,
+                              fontSize: 13,
                             ),
                           ),
                         ],
@@ -368,7 +372,7 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                     // Alert info
                     Text(
                       '${sos.createdByName ?? "Someone"} needs help!',
-                      style: const TextStyle(
+                      style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -377,7 +381,7 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                     const SizedBox(height: 4),
                     Text(
                       '${sos.type} — ${sos.subCategory ?? ""}',
-                      style: TextStyle(color: typeColor, fontSize: 14),
+                      style: GoogleFonts.inter(color: typeColor, fontSize: 14),
                     ),
                     const SizedBox(height: 12),
 
@@ -388,107 +392,116 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                           _Chip(
                             icon: Icons.place,
                             label: distanceText,
-                            color: Colors.orangeAccent,
+                            color: AppTheme.statusOpen,
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           _Chip(
                             icon: Icons.timer,
                             label: 'ETA: $etaText',
-                            color: Colors.greenAccent,
+                            color: AppTheme.ambulanceColor,
                           ),
                         ],
                       ),
                     const SizedBox(height: 12),
 
                     // Officer details
-                    if (sos.status == 'ASSIGNED' &&
-                        _officerDetails != null) ...[
-                      const Divider(color: Colors.grey),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.shield,
-                            color: Colors.blueAccent,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _officerDetails!.name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                    if (sos.status == 'ASSIGNED' && _officerDetails != null)
+                      GlassContainer(
+                        padding: const EdgeInsets.all(12),
+                        borderRadius: 12,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppTheme.policeColor.withValues(
+                                  alpha: 0.15,
                                 ),
-                                Text(
-                                  '${_officerDetails!.department ?? ""} • ${_officerDetails!.phone}',
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
+                              ),
+                              child: const Icon(
+                                Icons.security,
+                                color: AppTheme.policeColor,
+                                size: 18,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _officerDetails!.name,
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_officerDetails!.department ?? ""} • ${_officerDetails!.phone}',
+                                    style: GoogleFonts.inter(
+                                      color: AppTheme.textSecondary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                    ],
 
-                    // Family responders count
+                    // Family responders
                     if (_familyResponders.isNotEmpty) ...[
+                      const SizedBox(height: 10),
                       Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.family_restroom,
-                            color: Colors.greenAccent,
-                            size: 18,
+                            size: 16,
+                            color: AppTheme.ambulanceColor,
                           ),
                           const SizedBox(width: 8),
                           Text(
                             '${_familyResponders.length} family member(s) tracking',
-                            style: const TextStyle(
-                              color: Colors.greenAccent,
-                              fontSize: 13,
+                            style: GoogleFonts.inter(
+                              color: AppTheme.ambulanceColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
                     ],
+                    const SizedBox(height: 14),
 
-                    // ─── Action Buttons ─────────────────────────────────
+                    // ─── Action Buttons ──────────────────────────
                     if (sos.status != 'CLOSED') ...[
-                      // Navigate button — launches Google Maps with turn-by-turn
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton.icon(
                           onPressed: _launchNavigation,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1565C0),
+                            backgroundColor: AppTheme.policeColor,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          icon: const Icon(Icons.navigation, size: 22),
-                          label: const Text(
+                          icon: const Icon(Icons.navigation, size: 20),
+                          label: Text(
                             'NAVIGATE (Google Maps)',
-                            style: TextStyle(
-                              fontSize: 15,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              letterSpacing: 1,
+                              letterSpacing: 0.8,
                             ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 10),
-                      // Dismiss button
                       SizedBox(
                         width: double.infinity,
                         height: 44,
@@ -505,11 +518,11 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                             color: Colors.orangeAccent,
                             size: 18,
                           ),
-                          label: const Text(
+                          label: Text(
                             'DISMISS ALERT',
-                            style: TextStyle(
+                            style: GoogleFonts.inter(
                               color: Colors.orangeAccent,
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -524,27 +537,25 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.15),
+                          color: AppTheme.ambulanceColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: Colors.greenAccent.withValues(alpha: 0.3),
+                            color: AppTheme.ambulanceColor.withValues(
+                              alpha: 0.3,
+                            ),
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.my_location,
-                              color: Colors.greenAccent,
-                              size: 20,
-                            ),
-                            SizedBox(width: 10),
+                            PulsingDot(color: AppTheme.ambulanceColor, size: 6),
+                            const SizedBox(width: 10),
                             Text(
                               'Your location is being shared',
-                              style: TextStyle(
-                                color: Colors.greenAccent,
+                              style: GoogleFonts.inter(
+                                color: AppTheme.ambulanceColor,
                                 fontWeight: FontWeight.w600,
-                                fontSize: 14,
+                                fontSize: 13,
                               ),
                             ),
                           ],
@@ -557,26 +568,28 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
                       const SizedBox(height: 16),
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(14),
+                          color: AppTheme.ambulanceColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: Colors.greenAccent.withValues(alpha: 0.4),
+                            color: AppTheme.ambulanceColor.withValues(
+                              alpha: 0.3,
+                            ),
                           ),
                         ),
-                        child: const Column(
+                        child: Column(
                           children: [
                             Icon(
                               Icons.check_circle,
-                              color: Colors.greenAccent,
+                              color: AppTheme.ambulanceColor,
                               size: 36,
                             ),
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
                             Text(
                               'This alert has been resolved',
-                              style: TextStyle(
-                                color: Colors.greenAccent,
+                              style: GoogleFonts.inter(
+                                color: AppTheme.ambulanceColor,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -606,22 +619,23 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: 14, color: color),
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
+            style: GoogleFonts.inter(
               color: color,
               fontWeight: FontWeight.w600,
-              fontSize: 13,
+              fontSize: 12,
             ),
           ),
         ],

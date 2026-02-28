@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../app_theme.dart';
 import '../models/user_model.dart';
 import '../models/sos_model.dart';
 import '../services/firestore_service.dart';
@@ -39,19 +41,16 @@ class _PublicDashboardState extends State<PublicDashboard> {
   UserModel? _user;
   bool _isLoading = true;
 
-  // Family SOS alerts
   List<SOSModel> _familyAlerts = [];
   StreamSubscription? _familyAlertSub;
-  final Set<String> _notifiedSOSIds =
-      {}; // Track which SOS we already notified for
-  final Set<String> _dismissedSOSIds = {}; // Family alerts dismissed by user
+  final Set<String> _notifiedSOSIds = {};
+  final Set<String> _dismissedSOSIds = {};
 
   @override
   void initState() {
     super.initState();
     _loadUser();
     _locationService.requestPermission();
-    // Initialize panic service (volume triple-press → auto-SOS + recording)
     _panicService.initialize(onPanicTriggered: _onPanicTriggered);
   }
 
@@ -62,22 +61,15 @@ class _PublicDashboardState extends State<PublicDashboard> {
     super.dispose();
   }
 
-  /// Triggered by volume triple-press — auto-record audio + send POLICE HIGH alert
   Future<void> _onPanicTriggered() async {
     if (_user == null || _isPanicRecording) return;
-
-    // Check for active SOS first
     final activeSOS = await _firestoreService.getActiveSOSForUser(_user!.uid);
     if (activeSOS != null) {
       if (mounted) _navigateToTracking(activeSOS);
       return;
     }
-
-    // Start audio recording
     final started = await _panicService.startRecording();
     if (mounted) setState(() => _isPanicRecording = started);
-
-    // Auto-send POLICE HIGH SOS under Violence category
     try {
       final sos = await _sosService.createSOS(
         type: 'POLICE',
@@ -87,13 +79,10 @@ class _PublicDashboardState extends State<PublicDashboard> {
         createdByName: _user!.name,
         silent: true,
       );
-
-      // Auto-stop recording after 60 seconds
       Future.delayed(const Duration(seconds: 60), () async {
         await _panicService.stopRecording();
         if (mounted) setState(() => _isPanicRecording = false);
       });
-
       if (mounted) _navigateToTracking(sos);
     } catch (e) {
       await _panicService.stopRecording();
@@ -114,8 +103,6 @@ class _PublicDashboardState extends State<PublicDashboard> {
           _isLoading = false;
         });
       }
-
-      // Start listening for family SOS alerts
       _startFamilySOSListener(uid);
     }
   }
@@ -125,8 +112,6 @@ class _PublicDashboardState extends State<PublicDashboard> {
       alerts,
     ) {
       if (!mounted) return;
-
-      // Trigger local notification for NEW alerts we haven't seen yet
       for (final alert in alerts) {
         if (!_notifiedSOSIds.contains(alert.sosId)) {
           _notifiedSOSIds.add(alert.sosId);
@@ -136,13 +121,11 @@ class _PublicDashboardState extends State<PublicDashboard> {
           );
         }
       }
-
       setState(() => _familyAlerts = alerts);
     });
   }
 
   Future<void> _triggerSOS(String sosType, {bool silent = false}) async {
-    // ── Single-alert limit ──────────────────────────────────────
     final activeSOS = await _firestoreService.getActiveSOSForUser(_user!.uid);
     if (activeSOS != null) {
       _showError('You already have an active alert. Resolve it first.');
@@ -172,7 +155,7 @@ class _PublicDashboardState extends State<PublicDashboard> {
 
     final result = await Navigator.push<Map<String, String>>(
       context,
-      MaterialPageRoute(builder: (_) => SOSCategoryScreen(sosType: sosType)),
+      AppTheme.fadeSlideRoute(SOSCategoryScreen(sosType: sosType)),
     );
     if (result == null || !mounted) return;
 
@@ -206,7 +189,7 @@ class _PublicDashboardState extends State<PublicDashboard> {
   void _navigateToTracking(SOSModel sos) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => SOSTrackingScreen(sosId: sos.sosId)),
+      AppTheme.fadeSlideRoute(SOSTrackingScreen(sosId: sos.sosId)),
     );
   }
 
@@ -215,7 +198,7 @@ class _PublicDashboardState extends State<PublicDashboard> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E2C),
+        backgroundColor: AppTheme.surfaceCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Row(
           children: [
@@ -241,375 +224,470 @@ class _PublicDashboardState extends State<PublicDashboard> {
     }
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('ResQPIN'),
+        backgroundColor: Colors.transparent,
+        title: Text(
+          'ResQPIN',
+          style: GoogleFonts.inter(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.map),
+            icon: const Icon(Icons.map_outlined),
             tooltip: 'Crime Heatmap',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const HeatmapScreen()),
+              AppTheme.fadeSlideRoute(const HeatmapScreen()),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',
             onPressed: () async {
               await _authService.signOut();
               if (mounted) {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  AppTheme.fadeSlideRoute(const LoginScreen()),
                 );
               }
             },
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ─── Panic Recording Banner ───────────────────────────
-              if (_isPanicRecording)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.red.withValues(alpha: 0.4),
-                        Colors.red.withValues(alpha: 0.2),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.red.withValues(alpha: 0.6),
-                    ),
-                  ),
+      body: LiquidBackground(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+
+                // ─── Panic Recording Banner ────────────────────────
+                if (_isPanicRecording) _buildPanicBanner(),
+
+                // ─── Family Alert Banners ──────────────────────────
+                if (_familyAlerts.isNotEmpty)
+                  ..._familyAlerts
+                      .where((a) => !_dismissedSOSIds.contains(a.sosId))
+                      .map(
+                        (alert) => _FamilyAlertBanner(
+                          alert: alert,
+                          onTrack: () => Navigator.push(
+                            context,
+                            AppTheme.fadeSlideRoute(
+                              FamilyTrackingScreen(sos: alert),
+                            ),
+                          ),
+                          onDismiss: () =>
+                              setState(() => _dismissedSOSIds.add(alert.sosId)),
+                        ),
+                      ),
+
+                // ─── User Info Card ────────────────────────────────
+                GlassContainer(
                   child: Row(
                     children: [
-                      const Icon(Icons.mic, color: Colors.redAccent, size: 24),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          '🔴 RECORDING AUDIO — Panic alert sent',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                      // Avatar circle
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.policeColor.withValues(alpha: 0.2),
+                          border: Border.all(
+                            color: AppTheme.policeColor.withValues(alpha: 0.4),
+                            width: 2,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            (_user?.name.isNotEmpty == true)
+                                ? _user!.name[0].toUpperCase()
+                                : '?',
+                            style: GoogleFonts.inter(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.policeColor,
+                            ),
                           ),
                         ),
                       ),
-                      TextButton(
-                        onPressed: () async {
-                          await _panicService.stopRecording();
-                          if (mounted)
-                            setState(() => _isPanicRecording = false);
-                        },
-                        child: const Text(
-                          'STOP',
-                          style: TextStyle(color: Colors.red),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Welcome back,',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _user?.name ?? '',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.policeColor.withValues(
+                                  alpha: 0.15,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: AppTheme.policeColor.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.fingerprint,
+                                    size: 14,
+                                    color: AppTheme.policeColor,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _user?.uniqueCode ?? '------',
+                                    style: GoogleFonts.robotoMono(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.policeColor,
+                                      letterSpacing: 2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 22),
 
-              // ─── Family Alert Banner ──────────────────────────────
-              if (_familyAlerts.isNotEmpty)
-                ..._familyAlerts
-                    .where((a) => !_dismissedSOSIds.contains(a.sosId))
-                    .map(
-                      (alert) => _FamilyAlertBanner(
-                        alert: alert,
-                        onTrack: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => FamilyTrackingScreen(sos: alert),
-                          ),
-                        ),
-                        onDismiss: () {
-                          setState(() => _dismissedSOSIds.add(alert.sosId));
-                        },
+                // ─── Emergency Services ────────────────────────────
+                Text(
+                  'EMERGENCY SERVICES',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white54,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _EmergencyButton(
+                        icon: Icons.local_police,
+                        label: 'Police',
+                        color: AppTheme.policeColor,
+                        onTap: () => _triggerSOS('POLICE'),
+                        onLongPress: () => _triggerSOS('POLICE', silent: true),
                       ),
                     ),
-
-              // ─── User Info Card ──────────────────────────────────
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _EmergencyButton(
+                        icon: Icons.local_fire_department,
+                        label: 'Fire',
+                        color: AppTheme.fireColor,
+                        onTap: () => _triggerSOS('FIRE'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _EmergencyButton(
+                        icon: Icons.local_hospital,
+                        label: 'Medic',
+                        color: AppTheme.ambulanceColor,
+                        onTap: () => _triggerSOS('AMBULANCE'),
+                      ),
                     ),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 14),
+
+                // ─── Utility Buttons ───────────────────────────────
+                Row(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
+                    Expanded(
+                      child: _UtilityButton(
+                        icon: Icons.sailing,
+                        label: 'Fisherman Mode',
+                        color: AppTheme.fishermanColor,
+                        onTap: () => Navigator.push(
+                          context,
+                          AppTheme.fadeSlideRoute(
+                            FishermanModeScreen(user: _user!),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _UtilityButton(
+                        icon: Icons.family_restroom,
+                        label: 'Family Circle',
+                        color: AppTheme.familyColor,
+                        onTap: () => Navigator.push(
+                          context,
+                          AppTheme.fadeSlideRoute(const FamilyScreen()),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+
+                // ─── Recent Alerts ─────────────────────────────────
+                Text(
+                  'RECENT ALERTS',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white54,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: StreamBuilder<List<SOSModel>>(
+                    stream: _firestoreService.streamUserSOS(_user!.uid),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Error loading alerts',
+                            style: GoogleFonts.inter(
+                              color: Colors.redAccent,
+                              fontSize: 13,
+                            ),
+                          ),
+                        );
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final alerts = snapshot.data ?? [];
+                      if (alerts.isEmpty) {
+                        return Center(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                'Welcome,',
-                                style: Theme.of(context).textTheme.bodyMedium,
+                              Icon(
+                                Icons.shield_outlined,
+                                size: 48,
+                                color: Colors.white.withValues(alpha: 0.15),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 12),
                               Text(
-                                _user?.name ?? '',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(fontSize: 22),
-                                overflow: TextOverflow.ellipsis,
+                                'No alerts yet',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textDisabled,
+                                  fontSize: 14,
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF0D47A1,
-                            ).withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: const Color(
-                                0xFF1565C0,
-                              ).withValues(alpha: 0.5),
-                            ),
-                          ),
-                          child: Text(
-                            _user?.uniqueCode ?? '------',
-                            style: const TextStyle(
-                              color: Color(0xFF64B5F6),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    const _LiveClock(),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 28),
-
-              // ─── Emergency Buttons ────────────────────────────────
-              Text('Emergency', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _EmergencyButton(
-                      icon: Icons.local_police,
-                      label: 'Police',
-                      color: kSOSTypeColors['POLICE']!,
-                      onTap: () => _triggerSOS('POLICE'),
-                      onLongPress: () => _triggerSOS('POLICE', silent: true),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _EmergencyButton(
-                      icon: Icons.local_fire_department,
-                      label: 'Fire',
-                      color: kSOSTypeColors['FIRE']!,
-                      onTap: () => _triggerSOS('FIRE'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _EmergencyButton(
-                      icon: Icons.local_hospital,
-                      label: 'Ambulance',
-                      color: kSOSTypeColors['AMBULANCE']!,
-                      onTap: () => _triggerSOS('AMBULANCE'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // ─── Fisherman & Family Buttons ───────────────────────
-              Row(
-                children: [
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.sailing,
-                      label: 'Fisherman Mode',
-                      color: kSOSTypeColors['FISHERMAN']!,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => FishermanModeScreen(user: _user!),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.family_restroom,
-                      label: 'Family',
-                      color: const Color(0xFF8E24AA),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const FamilyScreen()),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // ─── Recent Alerts ────────────────────────────────────
-              Text(
-                'Recent Alerts',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: StreamBuilder<List<SOSModel>>(
-                  stream: _firestoreService.streamUserSOS(_user!.uid),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Text(
-                            'Error loading alerts:\n${snapshot.error}',
-                            style: const TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      );
-                    }
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final alerts = snapshot.data ?? [];
-                    if (alerts.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'No alerts yet',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      );
-                    }
-                    return ListView.builder(
-                      itemCount: alerts.length,
-                      itemBuilder: (context, i) {
-                        final alert = alerts[i];
-                        final typeColor =
-                            kSOSTypeColors[alert.type] ?? Colors.grey;
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: ListTile(
-                            leading: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: typeColor.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                kSOSTypeIcons[alert.type],
-                                color: typeColor,
-                              ),
-                            ),
-                            title: Text(
-                              '${alert.type} — ${alert.subCategory ?? ""}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'Status: ${alert.status} • ${DateFormat('dd/MM HH:mm').format(alert.createdAt)}',
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
-                              ),
-                            ),
-                            trailing: _statusBadge(alert.status),
-                            onTap: () {
-                              if (alert.status != 'CLOSED') {
-                                _navigateToTracking(alert);
-                              }
-                            },
-                          ),
                         );
-                      },
-                    );
-                  },
+                      }
+                      return ListView.builder(
+                        padding: EdgeInsets.zero,
+                        itemCount: alerts.length,
+                        itemBuilder: (context, i) => _AlertCard(
+                          alert: alerts[i],
+                          onTap: () {
+                            if (alerts[i].status != 'CLOSED') {
+                              _navigateToTracking(alerts[i]);
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _statusBadge(String status) {
-    Color color;
-    switch (status) {
-      case 'OPEN':
-        color = Colors.orangeAccent;
-        break;
-      case 'ASSIGNED':
-        color = Colors.blueAccent;
-        break;
-      case 'CLOSED':
-        color = Colors.greenAccent;
-        break;
-      default:
-        color = Colors.grey;
-    }
+  Widget _buildPanicBanner() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          colors: [
+            Colors.red.withValues(alpha: 0.25),
+            Colors.red.withValues(alpha: 0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.4)),
       ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+      child: Row(
+        children: [
+          const PulsingDot(color: Colors.redAccent, size: 10),
+          const SizedBox(width: 12),
+          const Icon(Icons.mic, color: Colors.redAccent, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'RECORDING AUDIO',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _panicService.stopRecording();
+              if (mounted) setState(() => _isPanicRecording = false);
+            },
+            child: Text(
+              'STOP',
+              style: GoogleFonts.inter(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Alert Card ──────────────────────────────────────────────────────────────
+class _AlertCard extends StatelessWidget {
+  final SOSModel alert;
+  final VoidCallback onTap;
+
+  const _AlertCard({required this.alert, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final typeColor = kSOSTypeColors[alert.type] ?? Colors.grey;
+    final statusColor = AppTheme.statusColor(alert.status);
+    final isOpen = alert.status == 'OPEN';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceCard.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.surfaceBorder),
+        ),
+        child: Row(
+          children: [
+            // Type icon
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: typeColor.withValues(alpha: 0.15),
+              ),
+              child: Icon(
+                kSOSTypeIcons[alert.type],
+                color: typeColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    alert.subCategory ?? alert.type,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('dd/MM HH:mm').format(alert.createdAt),
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textDisabled,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Status
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isOpen) PulsingDot(color: statusColor, size: 6),
+                if (!isOpen)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: statusColor,
+                    ),
+                  ),
+                const SizedBox(width: 6),
+                Text(
+                  alert.status,
+                  style: GoogleFonts.inter(
+                    color: statusColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ─── Family Alert Banner ─────────────────────────────────────────────────────
+// ─── Family Alert Banner ───────────────────────────────────────────────────
 class _FamilyAlertBanner extends StatelessWidget {
   final SOSModel alert;
   final VoidCallback onTrack;
@@ -623,28 +701,35 @@ class _FamilyAlertBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final typeColor = kSOSTypeColors[alert.type] ?? Colors.redAccent;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Colors.red.withValues(alpha: 0.3),
-            typeColor.withValues(alpha: 0.15),
+            Colors.red.withValues(alpha: 0.2),
+            Colors.red.withValues(alpha: 0.08),
           ],
         ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.warning_amber,
-                color: Colors.redAccent,
-                size: 28,
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.red.withValues(alpha: 0.2),
+                ),
+                child: const Icon(
+                  Icons.warning_amber,
+                  color: Colors.redAccent,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -652,8 +737,8 @@ class _FamilyAlertBanner extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '⚠️ ${alert.createdByName ?? "Family member"} needs help!',
-                      style: const TextStyle(
+                      '${alert.createdByName ?? "Family member"} needs help!',
+                      style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -662,34 +747,51 @@ class _FamilyAlertBanner extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       '${alert.type} — ${alert.subCategory ?? ""}',
-                      style: TextStyle(color: typeColor, fontSize: 12),
+                      style: GoogleFonts.inter(
+                        color: Colors.redAccent.withValues(alpha: 0.8),
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
-              // Close/dismiss button
               GestureDetector(
                 onTap: onDismiss,
-                child: const Icon(Icons.close, color: Colors.grey, size: 20),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white54,
+                    size: 16,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: onTrack,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               icon: const Icon(Icons.navigation, size: 18),
-              label: const Text(
+              label: Text(
                 'TRACK & NAVIGATE',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
             ),
           ),
@@ -699,64 +801,8 @@ class _FamilyAlertBanner extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Isolated clock widget — only this rebuilds every second, NOT the whole page
-// ═══════════════════════════════════════════════════════════════════════════════
-class _LiveClock extends StatefulWidget {
-  const _LiveClock();
-
-  @override
-  State<_LiveClock> createState() => _LiveClockState();
-}
-
-class _LiveClockState extends State<_LiveClock> {
-  late Timer _timer;
-  String _time = '';
-  String _date = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _update();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _update());
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
-  }
-
-  void _update() {
-    final now = DateTime.now();
-    setState(() {
-      _time = DateFormat('hh:mm:ss a').format(now);
-      _date = DateFormat('EEEE, dd MMMM yyyy').format(now);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(_date, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        Text(
-          _time,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 22,
-            fontWeight: FontWeight.w300,
-            letterSpacing: 2,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Emergency Button Widget ─────────────────────────────────────────────────
-class _EmergencyButton extends StatelessWidget {
+// ─── Emergency Button Widget ──────────────────────────────────────────────────
+class _EmergencyButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final Color color;
@@ -772,62 +818,88 @@ class _EmergencyButton extends StatelessWidget {
   });
 
   @override
+  State<_EmergencyButton> createState() => _EmergencyButtonState();
+}
+
+class _EmergencyButtonState extends State<_EmergencyButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              color.withValues(alpha: 0.3),
-              color.withValues(alpha: 0.15),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 36, color: color),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      onLongPress: widget.onLongPress,
+      child: AnimatedScale(
+        scale: _pressed ? 0.93 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceCard.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: widget.color.withValues(alpha: 0.25)),
+              boxShadow: [
+                BoxShadow(
+                  color: widget.color.withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  spreadRadius: -5,
+                ),
+              ],
             ),
-            if (onLongPress != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'Hold for silent',
-                  style: TextStyle(
-                    color: color.withValues(alpha: 0.5),
-                    fontSize: 9,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.color.withValues(alpha: 0.15),
+                  ),
+                  child: Icon(widget.icon, size: 26, color: widget.color),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  widget.label,
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
                   ),
                 ),
-              ),
-          ],
+                if (widget.onLongPress != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Hold for silent',
+                    style: GoogleFonts.inter(
+                      color: widget.color.withValues(alpha: 0.4),
+                      fontSize: 9,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-// ─── Action Button Widget ───────────────────────────────────────────────────
-class _ActionButton extends StatelessWidget {
+// ─── Utility Button Widget ───────────────────────────────────────────────────
+class _UtilityButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
   final VoidCallback onTap;
 
-  const _ActionButton({
+  const _UtilityButton({
     required this.icon,
     required this.label,
     required this.color,
@@ -839,23 +911,23 @@ class _ActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
+          color: AppTheme.surfaceCard.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          border: Border.all(color: AppTheme.surfaceBorder),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 24, color: color),
+            Icon(icon, size: 20, color: color),
             const SizedBox(width: 10),
             Text(
               label,
-              style: TextStyle(
-                color: color,
+              style: GoogleFonts.inter(
+                color: Colors.white,
                 fontWeight: FontWeight.w600,
-                fontSize: 14,
+                fontSize: 13,
               ),
             ),
           ],

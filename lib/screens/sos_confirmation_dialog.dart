@@ -1,4 +1,7 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../app_theme.dart';
 
 /// 5-second countdown confirmation dialog for SOS alerts.
 /// Returns true if SOS should be created (countdown completed),
@@ -38,7 +41,7 @@ class _SOSConfirmationDialogState extends State<SOSConfirmationDialog>
     });
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        Navigator.of(context).pop(true); // Confirmed
+        Navigator.of(context).pop(true);
       }
     });
   }
@@ -51,89 +54,119 @@ class _SOSConfirmationDialogState extends State<SOSConfirmationDialog>
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E2C),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Row(
-        children: [
-          Icon(
-            Icons.warning_amber_rounded,
-            color: Colors.orangeAccent,
-            size: 28,
-          ),
-          SizedBox(width: 10),
-          Text(
-            'Confirm SOS',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Sending ${widget.sosType} alert',
-            style: const TextStyle(color: Colors.white, fontSize: 16),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.subCategory,
-            style: const TextStyle(color: Colors.grey, fontSize: 14),
-          ),
-          const SizedBox(height: 24),
-          // Countdown circle
-          SizedBox(
-            width: 80,
-            height: 80,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, child) {
-                    return CircularProgressIndicator(
-                      value: 1.0 - _controller.value,
-                      strokeWidth: 6,
-                      backgroundColor: Colors.grey.shade800,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Colors.orangeAccent,
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+      child: AlertDialog(
+        backgroundColor: AppTheme.surfaceCard.withValues(alpha: 0.85),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: AppTheme.surfaceBorder),
+        ),
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.orangeAccent.withValues(alpha: 0.15),
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.orangeAccent,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Confirm SOS',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Sending ${widget.sosType} alert',
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.subCategory,
+              style: GoogleFonts.inter(
+                color: AppTheme.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 28),
+            // Countdown circle
+            SizedBox(
+              width: 90,
+              height: 90,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, child) {
+                      return CircularProgressIndicator(
+                        value: 1.0 - _controller.value,
+                        strokeWidth: 5,
+                        strokeCap: StrokeCap.round,
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.orangeAccent,
+                        ),
+                      );
+                    },
+                  ),
+                  Center(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Text(
+                        '$_secondsLeft',
+                        key: ValueKey(_secondsLeft),
+                        style: GoogleFonts.inter(
+                          color: Colors.orangeAccent,
+                          fontSize: 36,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    );
-                  },
-                ),
-                Center(
-                  child: Text(
-                    '$_secondsLeft',
-                    style: const TextStyle(
-                      color: Colors.orangeAccent,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Alert will be sent automatically',
-            style: TextStyle(color: Colors.grey, fontSize: 12),
+            const SizedBox(height: 18),
+            Text(
+              'Alert will be sent automatically',
+              style: GoogleFonts.inter(
+                color: AppTheme.textDisabled,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'CANCEL',
+              style: GoogleFonts.inter(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                letterSpacing: 1,
+              ),
+            ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false), // Cancelled
-          child: const Text(
-            'CANCEL',
-            style: TextStyle(
-              color: Colors.redAccent,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

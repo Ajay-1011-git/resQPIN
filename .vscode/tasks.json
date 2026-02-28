@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Flutter Analyze",
+			"type": "shell",
+			"command": "C:\\flutter\\bin\\flutter.bat analyze"
+		}
+	]
+}
