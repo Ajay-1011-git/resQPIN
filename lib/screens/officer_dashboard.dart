@@ -11,6 +11,8 @@ import '../services/location_service.dart';
 import '../services/auth_service.dart';
 import '../models/officer_location_model.dart';
 import '../constants.dart';
+import '../utils/animations.dart';
+import '../widgets/glass_widgets.dart';
 import 'alert_detail_screen.dart';
 import 'login_screen.dart';
 import 'heatmap_screen.dart';
@@ -99,13 +101,14 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
+        toolbarHeight: 64,
         title: Text(
           'Officer Dashboard',
           style: GoogleFonts.inter(fontWeight: FontWeight.w700),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.map_outlined),
+            icon: const Icon(Icons.map_outlined, size: 26),
             tooltip: 'Crime Heatmap',
             onPressed: () => Navigator.push(
               context,
@@ -113,7 +116,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout_rounded),
+            icon: const Icon(Icons.logout_rounded, size: 26),
             tooltip: 'Logout',
             onPressed: () async {
               _locationService.stopLocationUpdates();
@@ -138,153 +141,112 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
               children: [
                 const SizedBox(height: 8),
 
-                // ─── Officer Info Card (Stitch-style) ─────────────
-                GlassContainer(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          // Shield icon in colored circle
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: departmentColor.withValues(alpha: 0.15),
-                              border: Border.all(
-                                color: departmentColor.withValues(alpha: 0.3),
-                                width: 2,
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.security,
-                              color: departmentColor,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _user?.name ?? '',
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 3,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: departmentColor.withValues(
-                                          alpha: 0.15,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        _user?.department ?? '',
-                                        style: GoogleFonts.inter(
-                                          color: departmentColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.8,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // On Duty badge
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 3,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.ambulanceColor
-                                            .withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          PulsingDot(
-                                            color: AppTheme.ambulanceColor,
-                                            size: 5,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'ON DUTY',
-                                            style: GoogleFonts.inter(
-                                              color: AppTheme.ambulanceColor,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: 0.8,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                // ─── Officer Info Card (Enhanced Glassmorphism) ──
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 100),
+                  child: GlassContainer(
+                    glowColor: departmentColor,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            // Shield icon with gradient border
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    departmentColor.withValues(alpha: 0.25),
+                                    departmentColor.withValues(alpha: 0.1),
                                   ],
                                 ),
-                              ],
+                                border: Border.all(
+                                  color: departmentColor.withValues(alpha: 0.4),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.security,
+                                color: departmentColor,
+                                size: 24,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      _OfficerClock(color: departmentColor),
-                    ],
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _user?.name ?? '',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      GlassInfoChip(
+                                        icon: Icons.badge_outlined,
+                                        label: _user?.department ?? '',
+                                        color: departmentColor,
+                                        compact: true,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GlassStatusBadge(
+                                        label: 'ON DUTY',
+                                        color: AppTheme.ambulanceColor,
+                                        isActive: true,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _OfficerClock(color: departmentColor),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 18),
 
                 // ─── Section header ────────────────────────────────
-                Row(
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      size: 18,
-                      color: AppTheme.statusOpen,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'LIVE ALERTS',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 250),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 18,
+                        color: AppTheme.statusOpen,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'LIVE ALERTS',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                          ),
                         ),
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
+                      GlassInfoChip(
+                        icon: Icons.shield_outlined,
+                        label: _sosTypeForDepartment,
+                        color: departmentColor,
+                        compact: true,
                       ),
-                      decoration: BoxDecoration(
-                        color: departmentColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _sosTypeForDepartment,
-                        style: GoogleFonts.inter(
-                          color: departmentColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
 
@@ -390,8 +352,8 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   }
 }
 
-// ─── Stitch-style alert card with colored left border ────────────────────────
-class _OfficerAlertCard extends StatelessWidget {
+// ─── Officer Alert Card with glassmorphism ───────────────────────────────────
+class _OfficerAlertCard extends StatefulWidget {
   final SOSModel alert;
   final bool isMyAlert;
   final double? myLat;
@@ -407,182 +369,196 @@ class _OfficerAlertCard extends StatelessWidget {
   });
 
   @override
+  State<_OfficerAlertCard> createState() => _OfficerAlertCardState();
+}
+
+class _OfficerAlertCardState extends State<_OfficerAlertCard> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final severityColor =
-        kSeverityColors[alert.severity] ?? Colors.orangeAccent;
-    final borderColor = isMyAlert ? AppTheme.ambulanceColor : severityColor;
+        kSeverityColors[widget.alert.severity] ?? Colors.orangeAccent;
+    final accentColor =
+        widget.isMyAlert ? AppTheme.ambulanceColor : severityColor;
     String distanceText = '';
-    if (myLat != null && myLon != null) {
+    if (widget.myLat != null && widget.myLon != null) {
       final d = LocationService.calculateDistance(
-        myLat!,
-        myLon!,
-        alert.lat,
-        alert.lon,
+        widget.myLat!,
+        widget.myLon!,
+        widget.alert.lat,
+        widget.alert.lon,
       );
       distanceText = LocationService.formatDistance(d);
     }
 
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceCard.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.surfaceBorder),
-        ),
-        child: Row(
-          children: [
-            // Stitch left border accent
-            Container(
-              width: 4,
-              height: 80,
-              decoration: BoxDecoration(
-                color: borderColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  bottomLeft: Radius.circular(16),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceCard.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _pressed
+                  ? accentColor.withValues(alpha: 0.3)
+                  : AppTheme.surfaceBorder,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withValues(
+                  alpha: _pressed ? 0.12 : 0.04,
+                ),
+                blurRadius: 16,
+                spreadRadius: -6,
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Left accent border (gradient)
+              Container(
+                width: 4,
+                height: 82,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [accentColor, accentColor.withValues(alpha: 0.3)],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 14),
-            // Alert content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title + badge row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            alert.subCategory ?? alert.type,
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color:
-                                (isMyAlert
-                                        ? AppTheme.ambulanceColor
-                                        : severityColor)
-                                    .withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            isMyAlert ? 'ASSIGNED' : alert.severity,
-                            style: GoogleFonts.inter(
-                              color: isMyAlert
-                                  ? AppTheme.ambulanceColor
-                                  : severityColor,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // Reporter name
-                    if (alert.createdByName != null)
+              const SizedBox(width: 14),
+              // Alert content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Row(
                         children: [
-                          Icon(
-                            Icons.person_outline,
-                            size: 13,
-                            color: AppTheme.textSecondary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            alert.createdByName!,
-                            style: GoogleFonts.inter(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
+                          Expanded(
+                            child: Text(
+                              widget.alert.subCategory ?? widget.alert.type,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          GlassStatusBadge(
+                            label: widget.isMyAlert
+                                ? 'ASSIGNED'
+                                : widget.alert.severity,
+                            color: accentColor,
+                            isActive: widget.isMyAlert,
                           ),
                         ],
                       ),
-                    const SizedBox(height: 4),
-                    // Meta row
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time,
-                          size: 13,
-                          color: AppTheme.textDisabled,
+                      const SizedBox(height: 6),
+                      if (widget.alert.createdByName != null)
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.person_outline,
+                              size: 13,
+                              color: AppTheme.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              widget.alert.createdByName!,
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          DateFormat('HH:mm').format(alert.createdAt),
-                          style: GoogleFonts.inter(
-                            color: AppTheme.textDisabled,
-                            fontSize: 11,
-                          ),
-                        ),
-                        if (distanceText.isNotEmpty) ...[
-                          const SizedBox(width: 14),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
                           Icon(
-                            Icons.place,
+                            Icons.access_time,
                             size: 13,
                             color: AppTheme.textDisabled,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            distanceText,
+                            DateFormat('HH:mm').format(widget.alert.createdAt),
                             style: GoogleFonts.inter(
                               color: AppTheme.textDisabled,
                               fontSize: 11,
                             ),
                           ),
-                        ],
-                        if (alert.silent) ...[
-                          const SizedBox(width: 14),
-                          Icon(
-                            Icons.volume_off,
-                            size: 13,
-                            color: AppTheme.fireColor,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'SILENT',
-                            style: GoogleFonts.inter(
-                              color: AppTheme.fireColor,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
+                          if (distanceText.isNotEmpty) ...[
+                            const SizedBox(width: 14),
+                            Icon(
+                              Icons.place,
+                              size: 13,
+                              color: AppTheme.textDisabled,
                             ),
-                          ),
+                            const SizedBox(width: 4),
+                            Text(
+                              distanceText,
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textDisabled,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                          if (widget.alert.silent) ...[
+                            const SizedBox(width: 14),
+                            GlassInfoChip(
+                              icon: Icons.volume_off,
+                              label: 'SILENT',
+                              color: AppTheme.fireColor,
+                              compact: true,
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.policeColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Respond →',
+                    style: GoogleFonts.inter(
+                      color: AppTheme.policeColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                'Respond →',
-                style: GoogleFonts.inter(
-                  color: AppTheme.policeColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

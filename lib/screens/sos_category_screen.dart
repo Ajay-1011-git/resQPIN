@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_theme.dart';
 import '../constants.dart';
+import '../utils/animations.dart';
 
 /// Screen for selecting SOS sub-category and severity.
 /// Returns a Map with 'subCategory' and 'severity' on selection.
@@ -45,119 +46,154 @@ class _SOSCategoryScreenState extends State<SOSCategoryScreen> {
                 const SizedBox(height: 8),
 
                 // ─── Header ────────────────────────────────────────
-                Row(
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: typeColor.withValues(alpha: 0.15),
-                        border: Border.all(
-                          color: typeColor.withValues(alpha: 0.3),
-                          width: 2,
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 100),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              typeColor.withValues(alpha: 0.25),
+                              typeColor.withValues(alpha: 0.08),
+                            ],
+                          ),
+                          border: Border.all(
+                            color: typeColor.withValues(alpha: 0.4),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: typeColor.withValues(alpha: 0.3),
+                              blurRadius: 18,
+                              spreadRadius: -4,
+                            ),
+                          ],
                         ),
+                        child: Icon(typeIcon, color: typeColor, size: 30),
                       ),
-                      child: Icon(typeIcon, color: typeColor, size: 30),
-                    ),
-                    const SizedBox(width: 16),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Select Category',
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ShimmerEffect(
+                            child: Text(
+                              'Select Category',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'What type of emergency?',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: AppTheme.textSecondary,
+                          const SizedBox(height: 4),
+                          Text(
+                            'What type of emergency?',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: AppTheme.textSecondary,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 28),
 
                 // ─── Severity Selection ────────────────────────────
-                Text(
-                  'SEVERITY LEVEL',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white54,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: kSeverityLevels.map((level) {
-                    final isSelected = level == _selectedSeverity;
-                    final color = kSeverityColors[level]!;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedSeverity = level),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOutCubic,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? color.withValues(alpha: 0.15)
-                                : AppTheme.surfaceCard.withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: isSelected
-                                  ? color.withValues(alpha: 0.6)
-                                  : AppTheme.surfaceBorder,
-                              width: isSelected ? 2 : 1,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: color.withValues(alpha: 0.2),
-                                      blurRadius: 16,
-                                      spreadRadius: -4,
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: Center(
-                            child: Text(
-                              level,
-                              style: GoogleFonts.inter(
-                                color: isSelected
-                                    ? color
-                                    : AppTheme.textDisabled,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                          ),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 200),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SEVERITY LEVEL',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white54,
+                          letterSpacing: 1.5,
                         ),
                       ),
-                    );
-                  }).toList(),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: kSeverityLevels.map((level) {
+                          final isSelected = level == _selectedSeverity;
+                          final color = kSeverityColors[level]!;
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setState(() => _selectedSeverity = level),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOutCubic,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? color.withValues(alpha: 0.18)
+                                      : AppTheme.surfaceCard
+                                          .withValues(alpha: 0.3),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? color.withValues(alpha: 0.7)
+                                        : AppTheme.surfaceBorder,
+                                    width: isSelected ? 2 : 1,
+                                  ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color:
+                                                color.withValues(alpha: 0.25),
+                                            blurRadius: 20,
+                                            spreadRadius: -4,
+                                          ),
+                                        ]
+                                      : [],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    level,
+                                    style: GoogleFonts.inter(
+                                      color: isSelected
+                                          ? color
+                                          : AppTheme.textDisabled,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 28),
 
                 // ─── Sub-categories ────────────────────────────────
-                Text(
-                  'EMERGENCY TYPE',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white54,
-                    letterSpacing: 1.5,
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 350),
+                  child: Text(
+                    'EMERGENCY TYPE',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white54,
+                      letterSpacing: 1.5,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -167,57 +203,18 @@ class _SOSCategoryScreenState extends State<SOSCategoryScreen> {
                     itemCount: _subcategories.length,
                     itemBuilder: (context, i) {
                       final sub = _subcategories[i];
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context, {
-                            'subCategory': sub,
-                            'severity': _selectedSeverity,
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 18,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.surfaceCard.withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppTheme.surfaceBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: typeColor.withValues(alpha: 0.15),
-                                ),
-                                child: Icon(
-                                  typeIcon,
-                                  color: typeColor,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text(
-                                  sub,
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right,
-                                size: 20,
-                                color: AppTheme.textDisabled,
-                              ),
-                            ],
-                          ),
+                      return FadeSlideIn(
+                        delay: Duration(milliseconds: 400 + (i * 60)),
+                        child: _SubcategoryTile(
+                          label: sub,
+                          icon: typeIcon,
+                          color: typeColor,
+                          onTap: () {
+                            Navigator.pop(context, {
+                              'subCategory': sub,
+                              'severity': _selectedSeverity,
+                            });
+                          },
                         ),
                       );
                     },
@@ -225,6 +222,119 @@ class _SOSCategoryScreenState extends State<SOSCategoryScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Glassmorphic subcategory list tile with press-to-scale animation.
+class _SubcategoryTile extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SubcategoryTile({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_SubcategoryTile> createState() => _SubcategoryTileState();
+}
+
+class _SubcategoryTileState extends State<_SubcategoryTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          decoration: BoxDecoration(
+            color: _pressed
+                ? widget.color.withValues(alpha: 0.12)
+                : AppTheme.surfaceCard.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _pressed
+                  ? widget.color.withValues(alpha: 0.5)
+                  : AppTheme.surfaceBorder,
+              width: _pressed ? 1.5 : 1,
+            ),
+            boxShadow: _pressed
+                ? [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.2),
+                      blurRadius: 16,
+                      spreadRadius: -4,
+                    ),
+                  ]
+                : [],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      widget.color.withValues(alpha: 0.2),
+                      widget.color.withValues(alpha: 0.08),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: widget.color.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Icon(widget.icon, color: widget.color, size: 18),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _pressed
+                      ? widget.color.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                ),
+                child: Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color:
+                      _pressed ? widget.color : AppTheme.textDisabled,
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -141,7 +141,7 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppTheme.bgPrimary.withValues(alpha: 0.85),
         title: Text(
           'SOS Tracker',
           style: GoogleFonts.inter(fontWeight: FontWeight.w700),
@@ -210,7 +210,7 @@ class _SOSTrackingScreenState extends State<SOSTrackingScreen> {
 
               // ─── Frosted Status Panel ────────────────────────
               Expanded(
-                flex: 2,
+                flex: 1,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),

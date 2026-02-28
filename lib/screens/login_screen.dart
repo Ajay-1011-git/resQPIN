@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../utils/animations.dart';
+import '../widgets/glass_widgets.dart';
 import 'signup_screen.dart';
 import 'public_dashboard.dart';
 import 'officer_dashboard.dart';
@@ -24,7 +26,6 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = false;
   bool _obscurePassword = true;
   late AnimationController _animController;
-  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
@@ -32,10 +33,6 @@ class _LoginScreenState extends State<LoginScreen>
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeInOut,
     );
     _animController.forward();
   }
@@ -95,60 +92,74 @@ class _LoginScreenState extends State<LoginScreen>
     return Scaffold(
       body: LiquidBackground(
         child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 40),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 40),
 
-                      // ─── Logo ───────────────────────────────────────
-                      Container(
-                        width: 110,
-                        height: 110,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.policeColor.withValues(
-                                alpha: 0.5,
-                              ),
-                              blurRadius: 40,
-                              offset: const Offset(0, 10),
-                              spreadRadius: -5,
-                            ),
+                    // ─── Animated Logo with Glow ──────────────────
+                    ScaleIn(
+                      delay: const Duration(milliseconds: 100),
+                      child: BreathingGlow(
+                        glowColor: AppTheme.policeColor,
+                        maxBlur: 40,
+                        child: AnimatedGradientBorder(
+                          borderRadius: 28,
+                          borderWidth: 1.5,
+                          colors: const [
+                            AppTheme.policeColor,
+                            AppTheme.accentPurple,
+                            AppTheme.accentCyan,
                           ],
-                        ),
-                        child: const Icon(
-                          Icons.security,
-                          size: 52,
-                          color: Colors.white,
+                          child: Container(
+                            width: 110,
+                            height: 110,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFF1565C0),
+                                  Color(0xFF0D47A1),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(26),
+                            ),
+                            child: const Icon(
+                              Icons.security,
+                              size: 52,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 28),
+                    ),
+                    const SizedBox(height: 28),
 
-                      // ─── Title ──────────────────────────────────────
-                      Text(
-                        'RESQPIN',
-                        style: GoogleFonts.inter(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 6,
-                          color: Colors.white,
+                    // ─── Title ────────────────────────────────────
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 250),
+                      child: ShimmerEffect(
+                        child: Text(
+                          'RESQPIN',
+                          style: GoogleFonts.inter(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 6,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
+                    ),
+                    const SizedBox(height: 8),
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 350),
+                      child: Text(
                         'Emergency Response System',
                         style: GoogleFonts.inter(
                           fontSize: 14,
@@ -157,147 +168,134 @@ class _LoginScreenState extends State<LoginScreen>
                           letterSpacing: 0.5,
                         ),
                       ),
-                      const SizedBox(height: 52),
+                    ),
+                    const SizedBox(height: 52),
 
-                      // ─── Email Field ────────────────────────────────
-                      _buildLabel('EMAIL ADDRESS'),
-                      const SizedBox(height: 8),
-                      GlassContainer(
-                        padding: EdgeInsets.zero,
-                        borderRadius: 14,
-                        child: TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.transparent,
-                            border: InputBorder.none,
-                            hintText: 'name@example.com',
-                            hintStyle: const TextStyle(
-                              color: AppTheme.textDisabled,
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.email_outlined,
-                              color: AppTheme.textSecondary,
-                              size: 20,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 18,
-                              horizontal: 16,
-                            ),
-                          ),
-                          validator: (val) {
-                            if (val == null || val.trim().isEmpty)
-                              return 'Enter your email';
-                            if (!val.contains('@')) return 'Invalid email';
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ─── Password Field ─────────────────────────────
-                      _buildLabel('PASSWORD'),
-                      const SizedBox(height: 8),
-                      GlassContainer(
-                        padding: EdgeInsets.zero,
-                        borderRadius: 14,
-                        child: TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.transparent,
-                            border: InputBorder.none,
-                            hintText: '••••••••',
-                            hintStyle: const TextStyle(
-                              color: AppTheme.textDisabled,
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.lock_outline,
-                              color: AppTheme.textSecondary,
-                              size: 20,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                color: AppTheme.textSecondary,
-                                size: 20,
+                    // ─── Email Field ──────────────────────────────
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 450),
+                      child: Column(
+                        children: [
+                          _buildLabel('EMAIL ADDRESS'),
+                          const SizedBox(height: 8),
+                          GlassContainer(
+                            padding: EdgeInsets.zero,
+                            borderRadius: 14,
+                            child: TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
                               ),
-                              onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 18,
-                              horizontal: 16,
-                            ),
-                          ),
-                          validator: (val) {
-                            if (val == null || val.isEmpty)
-                              return 'Enter your password';
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 36),
-
-                      // ─── Login Button ───────────────────────────────
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _login,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.policeColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            elevation: 8,
-                            shadowColor: AppTheme.policeColor.withValues(
-                              alpha: 0.4,
-                            ),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      'Login Securely',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Icon(Icons.arrow_forward, size: 20),
-                                  ],
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: Colors.transparent,
+                                border: InputBorder.none,
+                                hintText: 'name@example.com',
+                                hintStyle: const TextStyle(
+                                  color: AppTheme.textDisabled,
                                 ),
-                        ),
+                                prefixIcon: const Icon(
+                                  Icons.email_outlined,
+                                  color: AppTheme.textSecondary,
+                                  size: 20,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 18,
+                                  horizontal: 16,
+                                ),
+                              ),
+                              validator: (val) {
+                                if (val == null || val.trim().isEmpty)
+                                  return 'Enter your email';
+                                if (!val.contains('@')) return 'Invalid email';
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 32),
+                    ),
+                    const SizedBox(height: 20),
 
-                      // ─── Sign Up Link ───────────────────────────────
-                      Row(
+                    // ─── Password Field ───────────────────────────
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 550),
+                      child: Column(
+                        children: [
+                          _buildLabel('PASSWORD'),
+                          const SizedBox(height: 8),
+                          GlassContainer(
+                            padding: EdgeInsets.zero,
+                            borderRadius: 14,
+                            child: TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: Colors.transparent,
+                                border: InputBorder.none,
+                                hintText: '••••••••',
+                                hintStyle: const TextStyle(
+                                  color: AppTheme.textDisabled,
+                                ),
+                                prefixIcon: const Icon(
+                                  Icons.lock_outline,
+                                  color: AppTheme.textSecondary,
+                                  size: 20,
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    color: AppTheme.textSecondary,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(
+                                    () =>
+                                        _obscurePassword = !_obscurePassword,
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 18,
+                                  horizontal: 16,
+                                ),
+                              ),
+                              validator: (val) {
+                                if (val == null || val.isEmpty)
+                                  return 'Enter your password';
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+
+                    // ─── Login Button ─────────────────────────────
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 650),
+                      child: GradientLoadingButton(
+                        label: 'Login Securely',
+                        icon: Icons.arrow_forward,
+                        isLoading: _isLoading,
+                        onPressed: _login,
+                        color: AppTheme.policeColor,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // ─── Sign Up Link ─────────────────────────────
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 750),
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
@@ -323,9 +321,9 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 40),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
               ),
             ),

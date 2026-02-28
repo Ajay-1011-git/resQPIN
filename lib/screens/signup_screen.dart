@@ -6,6 +6,8 @@ import '../services/firestore_service.dart';
 import '../services/sos_service.dart';
 import '../models/user_model.dart';
 import '../constants.dart';
+
+import '../widgets/glass_widgets.dart';
 import 'public_dashboard.dart';
 import 'officer_dashboard.dart';
 
@@ -276,26 +278,21 @@ class _SignupScreenState extends State<SignupScreen> {
                           children: [
                             _buildLabel('GENDER'),
                             const SizedBox(height: 8),
-                            GlassContainer(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              borderRadius: 14,
-                              child: DropdownButtonFormField<String>(
+                            DropdownButtonFormField<String>(
                                 initialValue: _selectedGender,
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  prefixIcon: Icon(
-                                    Icons.wc_outlined,
-                                    color: AppTheme.textSecondary,
-                                    size: 20,
-                                  ),
-                                  contentPadding: EdgeInsets.zero,
+                                isExpanded: true,
+                                decoration: AppTheme.glassInput(
+                                  label: '',
+                                  hint: 'Gender',
+                                  icon: Icons.wc_outlined,
+                                ).copyWith(
+                                  labelText: null,
+                                  floatingLabelBehavior: FloatingLabelBehavior.never,
                                 ),
                                 dropdownColor: AppTheme.surfaceCard,
                                 style: GoogleFonts.inter(
                                   color: Colors.white,
-                                  fontSize: 14,
+                                  fontSize: 13,
                                 ),
                                 items: _genders.map((g) {
                                   return DropdownMenuItem(
@@ -304,10 +301,10 @@ class _SignupScreenState extends State<SignupScreen> {
                                   );
                                 }).toList(),
                                 onChanged: (val) {
-                                  if (val != null)
+                                  if (val != null) {
                                     setState(() => _selectedGender = val);
+                                  }
                                 },
-                              ),
                             ),
                           ],
                         ),
@@ -400,39 +397,13 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 32),
 
                   // ─── Sign Up Button ─────────────────────────────
-                  SizedBox(
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _signup,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.policeColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 8,
-                        shadowColor: AppTheme.policeColor.withValues(
-                          alpha: 0.4,
-                        ),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              'CREATE ACCOUNT',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.5,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
+                  GradientLoadingButton(
+                    label: 'CREATE ACCOUNT',
+                    isLoading: _isLoading,
+                    onPressed: _signup,
+                    color: _selectedRole == 'OFFICER'
+                        ? AppTheme.policeColor
+                        : AppTheme.ambulanceColor,
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -493,8 +464,8 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 }
 
-// ─── Role Selection Card Widget ──────────────────────────────────────────────
-class _RoleCard extends StatelessWidget {
+// ─── Role Selection Card Widget with glassmorphism ───────────────────────────
+class _RoleCard extends StatefulWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
@@ -510,60 +481,88 @@ class _RoleCard extends StatelessWidget {
   });
 
   @override
+  State<_RoleCard> createState() => _RoleCardState();
+}
+
+class _RoleCardState extends State<_RoleCard> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? color.withValues(alpha: 0.15)
-              : AppTheme.surfaceCard.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected
-                ? color.withValues(alpha: 0.6)
-                : AppTheme.surfaceBorder,
-            width: isSelected ? 2 : 1,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.95 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          decoration: BoxDecoration(
+            color: widget.isSelected
+                ? widget.color.withValues(alpha: 0.12)
+                : AppTheme.surfaceCard.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: widget.isSelected
+                  ? widget.color.withValues(alpha: 0.5)
+                  : AppTheme.surfaceBorder,
+              width: widget.isSelected ? 1.5 : 1,
+            ),
+            boxShadow: widget.isSelected
+                ? [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.2),
+                      blurRadius: 24,
+                      spreadRadius: -6,
+                    ),
+                  ]
+                : [],
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.2),
-                    blurRadius: 20,
-                    spreadRadius: -5,
+          child: Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.color.withValues(
+                    alpha: widget.isSelected ? 0.2 : 0.08,
                   ),
-                ]
-              : [],
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withValues(alpha: isSelected ? 0.2 : 0.1),
+                  border: Border.all(
+                    color: widget.color.withValues(
+                      alpha: widget.isSelected ? 0.35 : 0.1,
+                    ),
+                  ),
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: 26,
+                  color: widget.isSelected
+                      ? widget.color
+                      : AppTheme.textSecondary,
+                ),
               ),
-              child: Icon(
-                icon,
-                size: 26,
-                color: isSelected ? color : AppTheme.textSecondary,
+              const SizedBox(height: 10),
+              Text(
+                widget.label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: widget.isSelected
+                      ? widget.color
+                      : AppTheme.textSecondary,
+                  letterSpacing: 1.5,
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: isSelected ? color : AppTheme.textSecondary,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

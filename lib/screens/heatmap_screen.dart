@@ -237,13 +237,16 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppTheme.bgPrimary.withValues(alpha: 0.85),
         title: Text(
           'Crime Heatmap',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
         ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
@@ -277,25 +280,13 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.auto_graph,
-                      size: 14,
-                      color: Colors.white70,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'MOSPI 2007 Table 29.1 — IPC Crimes (2006) • Distributed by City',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Crime Density by City',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -317,14 +308,6 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                     _LegendItem(color: const Color(0xCC76FF03), label: '3K-8K'),
                     _LegendItem(color: const Color(0xCC00E676), label: '<3K'),
                   ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'All India: 18,78,293 crimes • ${_distributedData.length} cities across 35 States/UTs',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.textDisabled,
-                    fontSize: 9,
-                  ),
                 ),
               ],
             ),

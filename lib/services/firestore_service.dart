@@ -267,6 +267,9 @@ class FirestoreService {
     required String fromUid,
     required String toUid,
   }) async {
+    // Ensure both users have a family_links document
+    await getFamilyLink(fromUid);
+    await getFamilyLink(toUid);
     await _db.collection('family_links').doc(toUid).update({
       'pendingRequests': FieldValue.arrayUnion([fromUid]),
     });
@@ -311,13 +314,14 @@ class FirestoreService {
     await batch.commit();
   }
 
-  /// Stream family link
-  Stream<FamilyLinkModel?> streamFamilyLink(String uid) {
+  /// Stream family link — always returns a valid model (empty if doc missing)
+  Stream<FamilyLinkModel> streamFamilyLink(String uid) {
     return _db.collection('family_links').doc(uid).snapshots().map((snap) {
       if (snap.exists && snap.data() != null) {
         return FamilyLinkModel.fromMap(snap.data()!);
       }
-      return null;
+      // Return empty model so UI always renders
+      return FamilyLinkModel(uid: uid, linkedUsers: [], pendingRequests: []);
     });
   }
 }

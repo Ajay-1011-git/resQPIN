@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 /// - Listens for volume triple-press via platform channel
 /// - Controls native audio recording via platform channel
 /// - Provides recording file path
+/// - Manages RECORD_AUDIO runtime permission
 class PanicService {
   static final PanicService _instance = PanicService._internal();
   factory PanicService() => _instance;
@@ -25,17 +26,30 @@ class PanicService {
     });
   }
 
-  /// Start audio recording via native Android MediaRecorder
+  /// Request microphone permission before it's needed (call during app init)
+  Future<bool> requestMicPermission() async {
+    try {
+      final result = await _channel.invokeMethod<dynamic>('requestMicPermission');
+      return result == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Start audio recording via native Android MediaRecorder.
+  /// Automatically requests mic permission if not yet granted.
   Future<bool> startRecording() async {
     if (_isRecording) return true;
 
     try {
-      final path = await _channel.invokeMethod<String>('startRecording');
-      if (path != null) {
-        _currentRecordingPath = path;
+      final result = await _channel.invokeMethod<dynamic>('startRecording');
+      if (result is String) {
+        _currentRecordingPath = result;
         _isRecording = true;
         return true;
       }
+      // result == false means permission was denied or failed
+      _isRecording = false;
       return false;
     } catch (e) {
       _isRecording = false;

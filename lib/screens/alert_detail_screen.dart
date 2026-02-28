@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,8 @@ import '../models/officer_location_model.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
 import '../constants.dart';
+import '../utils/animations.dart';
+import '../widgets/glass_widgets.dart';
 
 class AlertDetailScreen extends StatefulWidget {
   final SOSModel sos;
@@ -35,6 +38,12 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
   @override
   void initState() {
     super.initState();
+    // If this officer already attended this alert, skip straight to map view
+    if (widget.sos.status == 'ASSIGNED' &&
+        widget.sos.assignedOfficerId == widget.officerUser.uid) {
+      _attended = true;
+      _showMap = true;
+    }
     _loadOfficerLocation();
   }
 
@@ -43,6 +52,27 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
       final pos = await _locationService.getCurrentPosition();
       if (mounted) {
         setState(() => _officerPos = LatLng(pos.latitude, pos.longitude));
+      }
+      // If already attending, start live location updates
+      if (_attended) {
+        _locationService.startLocationUpdates(
+          onLocationChanged: (position) {
+            if (mounted) {
+              setState(
+                () =>
+                    _officerPos = LatLng(position.latitude, position.longitude),
+              );
+            }
+            _firestoreService.updateOfficerLocation(
+              OfficerLocationModel(
+                officerId: widget.officerUser.uid,
+                lat: position.latitude,
+                lon: position.longitude,
+                updatedAt: DateTime.now(),
+              ),
+            );
+          },
+        );
       }
     } catch (_) {}
   }
@@ -201,7 +231,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
           // ─── In-App Map (shown after ATTEND) ─────────────
           if (_showMap)
             SizedBox(
-              height: 280,
+              height: MediaQuery.of(context).size.height * 0.55,
               child: Stack(
                 children: [
                   GoogleMap(
@@ -241,41 +271,54 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                     zoomControlsEnabled: true,
                     mapType: MapType.normal,
                   ),
-                  // Distance/ETA overlay
+                  // Distance/ETA glass overlay
                   if (_officerPos != null)
                     Positioned(
                       top: MediaQuery.of(context).padding.top + 56,
                       left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.bgPrimary.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: typeColor.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.directions_car,
-                              size: 16,
-                              color: typeColor,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _getDistanceText(),
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                            decoration: BoxDecoration(
+                              color: AppTheme.bgPrimary.withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: typeColor.withValues(alpha: 0.3),
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: typeColor.withValues(alpha: 0.15),
+                                  blurRadius: 12,
+                                  spreadRadius: -2,
+                                ),
+                              ],
                             ),
-                          ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.directions_car,
+                                  size: 16,
+                                  color: typeColor,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _getDistanceText(),
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -285,8 +328,8 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
 
           // ─── Details Section ──────────────────────────────
           Expanded(
-            child: Container(
-              color: AppTheme.bgPrimary,
+            child: LiquidBackground(
+              accentColor: typeColor,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -296,229 +339,166 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                       SizedBox(height: MediaQuery.of(context).padding.top + 56),
 
                     // Alert Header Card
-                    GlassContainer(
-                      borderColor: typeColor.withValues(alpha: 0.2),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: typeColor.withValues(alpha: 0.15),
-                                  border: Border.all(
-                                    color: typeColor.withValues(alpha: 0.3),
-                                    width: 2,
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 100),
+                      child: GlassContainer(
+                        glowColor: typeColor,
+                        borderColor: typeColor.withValues(alpha: 0.25),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 52,
+                                  height: 52,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        typeColor.withValues(alpha: 0.25),
+                                        typeColor.withValues(alpha: 0.08),
+                                      ],
+                                    ),
+                                    border: Border.all(
+                                      color: typeColor.withValues(alpha: 0.4),
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: typeColor.withValues(alpha: 0.2),
+                                        blurRadius: 14,
+                                        spreadRadius: -2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    kSOSTypeIcons[widget.sos.type] ??
+                                        Icons.emergency,
+                                    color: typeColor,
+                                    size: 24,
                                   ),
                                 ),
-                                child: Icon(
-                                  kSOSTypeIcons[widget.sos.type] ??
-                                      Icons.emergency,
-                                  color: typeColor,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      widget.sos.type,
-                                      style: GoogleFonts.inter(
-                                        color: typeColor,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 1,
-                                      ),
-                                    ),
-                                    if (widget.sos.subCategory != null)
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        widget.sos.subCategory!,
+                                        widget.sos.type,
                                         style: GoogleFonts.inter(
-                                          color: Colors.white70,
-                                          fontSize: 14,
+                                          color: typeColor,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 1,
                                         ),
                                       ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: severityColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  widget.sos.severity,
-                                  style: GoogleFonts.inter(
-                                    color: severityColor,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 11,
+                                      if (widget.sos.subCategory != null)
+                                        Text(
+                                          widget.sos.subCategory!,
+                                          style: GoogleFonts.inter(
+                                            color: Colors.white70,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
+                                GlassStatusBadge(
+                                  label: widget.sos.severity,
+                                  color: severityColor,
+                                ),
+                              ],
+                            ),
+                            if (widget.sos.silent) ...[
+                              const SizedBox(height: 12),
+                              GlassInfoChip(
+                                icon: Icons.volume_off,
+                                label: 'SILENT — Handle with caution',
+                                color: Colors.redAccent,
                               ),
                             ],
-                          ),
-                          if (widget.sos.silent) ...[
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Details Grid with staggered entrance
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 200),
+                      child: _DetailRow(
+                        icon: Icons.person_outline,
+                        label: 'Reported by',
+                        value: widget.sos.createdByName ?? 'Unknown',
+                      ),
+                    ),
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 260),
+                      child: _DetailRow(
+                        icon: Icons.access_time,
+                        label: 'Created at',
+                        value: DateFormat(
+                          'dd MMM yyyy, HH:mm:ss',
+                        ).format(widget.sos.createdAt),
+                      ),
+                    ),
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 320),
+                      child: _DetailRow(
+                        icon: Icons.pin_drop,
+                        label: 'DIGIPIN',
+                        value: widget.sos.digipin,
+                        isCode: true,
+                      ),
+                    ),
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 380),
+                      child: _DetailRow(
+                        icon: Icons.place,
+                        label: 'Coordinates',
+                        value:
+                            '${widget.sos.lat.toStringAsFixed(5)}, ${widget.sos.lon.toStringAsFixed(5)}',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ─── Action Buttons ─────────────────────────
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 450),
+                      child: Column(
+                        children: [
+                          if (!_attended) ...[
+                            GradientLoadingButton(
+                              label: _isAttending ? 'ASSIGNING...' : 'ATTEND',
+                              isLoading: _isAttending,
+                              icon: Icons.check_circle_outline,
+                              color: typeColor,
+                              onPressed: _isAttending ? null : _attendAlert,
+                            ),
+                          ] else ...[
+                            if (!_showMap)
+                              GradientLoadingButton(
+                                label: 'SHOW MAP',
+                                isLoading: false,
+                                icon: Icons.map,
+                                color: AppTheme.policeColor,
+                                onPressed: () =>
+                                    setState(() => _showMap = true),
+                              ),
                             const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.redAccent.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.volume_off,
-                                    size: 14,
-                                    color: Colors.redAccent,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'SILENT ALERT — Handle with caution',
-                                    style: GoogleFonts.inter(
-                                      color: Colors.redAccent,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            _GlassOutlineButton(
+                              label: 'MARK RESOLVED',
+                              icon: Icons.task_alt,
+                              color: AppTheme.ambulanceColor,
+                              onPressed: _closeAlert,
                             ),
                           ],
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-
-                    // Details Grid
-                    _DetailRow(
-                      icon: Icons.person_outline,
-                      label: 'Reported by',
-                      value: widget.sos.createdByName ?? 'Unknown',
-                    ),
-                    _DetailRow(
-                      icon: Icons.access_time,
-                      label: 'Created at',
-                      value: DateFormat(
-                        'dd MMM yyyy, HH:mm:ss',
-                      ).format(widget.sos.createdAt),
-                    ),
-                    _DetailRow(
-                      icon: Icons.pin_drop,
-                      label: 'DIGIPIN',
-                      value: widget.sos.digipin,
-                      isCode: true,
-                    ),
-                    _DetailRow(
-                      icon: Icons.place,
-                      label: 'Coordinates',
-                      value:
-                          '${widget.sos.lat.toStringAsFixed(5)}, ${widget.sos.lon.toStringAsFixed(5)}',
-                    ),
-                    const SizedBox(height: 24),
-
-                    // ─── Action Buttons ─────────────────────────
-                    if (!_attended) ...[
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton.icon(
-                          onPressed: _isAttending ? null : _attendAlert,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: typeColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          icon: _isAttending
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.check_circle_outline,
-                                  size: 22,
-                                ),
-                          label: Text(
-                            _isAttending ? 'ASSIGNING...' : 'ATTEND',
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      if (!_showMap)
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton.icon(
-                            onPressed: () => setState(() => _showMap = true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.policeColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            icon: const Icon(Icons.map, size: 22),
-                            label: Text(
-                              'SHOW MAP',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: OutlinedButton.icon(
-                          onPressed: _closeAlert,
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: AppTheme.ambulanceColor),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          icon: Icon(
-                            Icons.task_alt,
-                            size: 22,
-                            color: AppTheme.ambulanceColor,
-                          ),
-                          label: Text(
-                            'MARK RESOLVED',
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.5,
-                              color: AppTheme.ambulanceColor,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -547,16 +527,29 @@ class _DetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: AppTheme.surfaceCard.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.surfaceBorder),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppTheme.surfaceBorder.withValues(alpha: 0.6),
+        ),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: AppTheme.textSecondary),
-          const SizedBox(width: 12),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppTheme.accentCyan.withValues(alpha: 0.1),
+              border: Border.all(
+                color: AppTheme.accentCyan.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Icon(icon, size: 16, color: AppTheme.accentCyan),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -570,7 +563,7 @@ class _DetailRow extends StatelessWidget {
                     letterSpacing: 1,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   value,
                   style: isCode
@@ -590,6 +583,85 @@ class _DetailRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Glass-styled outline button with press animation.
+class _GlassOutlineButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+
+  const _GlassOutlineButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
+
+  @override
+  State<_GlassOutlineButton> createState() => _GlassOutlineButtonState();
+}
+
+class _GlassOutlineButtonState extends State<_GlassOutlineButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onPressed();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+            color: _pressed
+                ? widget.color.withValues(alpha: 0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.color.withValues(alpha: _pressed ? 0.8 : 0.5),
+              width: 1.5,
+            ),
+            boxShadow: _pressed
+                ? [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.15),
+                      blurRadius: 16,
+                      spreadRadius: -4,
+                    ),
+                  ]
+                : [],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(widget.icon, size: 22, color: widget.color),
+              const SizedBox(width: 10),
+              Text(
+                widget.label,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                  color: widget.color,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

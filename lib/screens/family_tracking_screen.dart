@@ -273,7 +273,7 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppTheme.bgPrimary.withValues(alpha: 0.85),
         title: Text(
           'Family Tracking',
           style: GoogleFonts.inter(fontWeight: FontWeight.w700),
@@ -306,7 +306,7 @@ class _FamilyTrackingScreenState extends State<FamilyTrackingScreen> {
 
           // ─── Frosted Info Panel ──────────────────────────
           Expanded(
-            flex: 2,
+            flex: 1,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
