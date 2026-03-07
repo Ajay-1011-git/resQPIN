@@ -34,7 +34,7 @@ Instead of dealing with complex coordinates, the app instantly converts precise 
 - **Smart Classification:** Categorization by emergency type (Accident, Fire, Theft, etc.) determining optimal response priorities (Severity: HIGH/MED/LOW).
 - **Atomic Dispatch:** Built on Firestore transactions to assign exactly *one* officer per incident, preventing duplicate dispatching conflicts.
 
-### ilent Panic Mode
+### Silent Panic Mode
 - **Hardware-Triggered:** Activate silently by triple-pressing the volume-down button within 1.5 seconds.
 - **Covert Operation:** Dispatches a high-severity police alert without waking the screen or showing UI.
 - **Evidence Preservation:** Automatically invokes native Android background audio recording (AAC/M4A) for 60 seconds.
