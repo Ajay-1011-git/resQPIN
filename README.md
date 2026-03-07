@@ -48,7 +48,7 @@ Instead of dealing with complex coordinates, the app instantly converts precise 
 - **Unique Linking:** Connect family members using a secure 6-character unique code system.
 - **Broadcast Alerts:** If a user triggers an SOS, all linked family members are instantly notified and can join the tracking session live.
 
-### ⚓ Fisherman Mode (Marine Safety)
+### Fisherman Mode (Marine Safety)
 - **Marine Weather Dashboard:** Real-time monitoring of wind speed, wave height, swell, and sea pressure via Open-Meteo API.
 - **Cyclone & Storm Advisories:** Automatic tiered alerts leveraging IMD classifications (Cyclonic Storm through Very Severe).
 - **Geo-fenced SOS:** Coast Guard specific dispatching tailored for marine environments.
@@ -127,6 +127,6 @@ Instead of dealing with complex coordinates, the app instantly converts precise 
 ---
 
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License.
