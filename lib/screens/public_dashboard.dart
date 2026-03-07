@@ -11,6 +11,8 @@ import '../services/sos_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../services/panic_service.dart';
+import '../services/voice_emergency_service.dart';
+import '../services/nlp_classifier_service.dart';
 import '../constants.dart';
 import '../utils/animations.dart';
 import '../widgets/emergency_button.dart';
@@ -18,6 +20,7 @@ import '../widgets/glass_widgets.dart';
 import 'login_screen.dart';
 import 'sos_category_screen.dart';
 import 'sos_confirmation_dialog.dart';
+import 'voice_emergency_confirmation_dialog.dart';
 import 'sos_tracking_screen.dart';
 import 'fisherman_mode_screen.dart';
 import 'family_screen.dart';
@@ -39,6 +42,8 @@ class _PublicDashboardState extends State<PublicDashboard> {
   final AuthService _authService = AuthService();
   final NotificationService _notificationService = NotificationService();
   final PanicService _panicService = PanicService();
+  final VoiceEmergencyService _voiceService = VoiceEmergencyService();
+  final NLPClassifierService _nlpClassifier = NLPClassifierService();
   bool _isPanicRecording = false;
 
   UserModel? _user;
@@ -194,6 +199,99 @@ class _PublicDashboardState extends State<PublicDashboard> {
       if (mounted) Navigator.pop(context);
       _navigateToTracking(sos);
     } catch (e) {
+      if (mounted) Navigator.pop(context);
+      _showError('Failed to send alert: $e');
+    }
+  }
+
+  // ─── Voice Emergency Flow ──────────────────────────────────────────────
+  Future<void> _triggerVoiceEmergency() async {
+    print('[VoiceEmergency] Voice Emergency button pressed');
+    // Guard: check for active SOS
+    final activeSOS = await _firestoreService.getActiveSOSForUser(_user!.uid);
+    if (activeSOS != null) {
+      _showError('You already have an active alert. Resolve it first.');
+      _navigateToTracking(activeSOS);
+      return;
+    }
+
+    // Initialize voice service
+    print('[VoiceEmergency] Initializing voice service...');
+    final available = await _voiceService.initialize();
+    if (!available) {
+      print('[VoiceEmergency] Speech recognition NOT available');
+      _showError('Speech recognition is not available on this device.');
+      return;
+    }
+    print('[VoiceEmergency] Voice service ready, showing listening sheet');
+
+    // Show bottom sheet for voice listening
+    if (!mounted) return;
+    final recognizedText = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _VoiceListeningSheet(
+        voiceService: _voiceService,
+      ),
+    );
+
+    // Handle empty or null speech
+    if (recognizedText == null || recognizedText.trim().isEmpty) {
+      print('[VoiceEmergency] No speech captured (null or empty)');
+      if (mounted) {
+        _showError('Could not detect speech. Please try again.');
+      }
+      return;
+    }
+
+    print('[VoiceEmergency] Speech captured: "$recognizedText"');
+    print('[VoiceEmergency] Running NLP classifier...');
+
+    // Classify the text
+    final classification = _nlpClassifier.classifyEmergency(recognizedText);
+
+    // Handle UNKNOWN classification (no keywords matched)
+    if (classification.type == 'UNKNOWN') {
+      print('[VoiceEmergency] Classification returned UNKNOWN — not creating SOS');
+      if (mounted) {
+        _showError('Could not classify emergency from your speech. Please try again with clearer keywords.');
+      }
+      return;
+    }
+
+    print('[VoiceEmergency] Classification: ${classification.type} / ${classification.subCategory} / ${classification.severity}');
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => VoiceEmergencyConfirmationDialog(
+        classification: classification,
+        recognizedText: recognizedText,
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      print('[VoiceEmergency] User cancelled confirmation');
+      return;
+    }
+
+    // Create SOS via existing pipeline
+    print('[VoiceEmergency] User confirmed — creating SOS...');
+    _showLoadingDialog('Sending alert...');
+    try {
+      final sos = await _sosService.createSOS(
+        type: classification.type,
+        subCategory: classification.subCategory,
+        severity: classification.severity,
+        createdBy: _user!.uid,
+        createdByName: _user!.name,
+      );
+      print('[VoiceEmergency] SOS created: ${sos.sosId}');
+      if (mounted) Navigator.pop(context);
+      _navigateToTracking(sos);
+    } catch (e) {
+      print('[VoiceEmergency] SOS creation failed: $e');
       if (mounted) Navigator.pop(context);
       _showError('Failed to send alert: $e');
     }
@@ -461,6 +559,18 @@ class _PublicDashboardState extends State<PublicDashboard> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // ─── Voice Emergency Button ────────────────────────────
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 400),
+                  child: GlassUtilityButton(
+                    icon: Icons.mic_rounded,
+                    label: 'Voice Emergency',
+                    color: AppTheme.accentPurple,
+                    onTap: _triggerVoiceEmergency,
                   ),
                 ),
                 const SizedBox(height: 22),
@@ -810,6 +920,334 @@ class _FamilyAlertBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Voice Listening Bottom Sheet ──────────────────────────────────────────
+class _VoiceListeningSheet extends StatefulWidget {
+  final VoiceEmergencyService voiceService;
+
+  const _VoiceListeningSheet({required this.voiceService});
+
+  @override
+  State<_VoiceListeningSheet> createState() => _VoiceListeningSheetState();
+}
+
+class _VoiceListeningSheetState extends State<_VoiceListeningSheet>
+    with SingleTickerProviderStateMixin {
+  String _recognizedText = '';
+  bool _isListening = false;
+  bool _hasResult = false;
+  late AnimationController _pulseCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+    _startListening();
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    widget.voiceService.stopListening();
+    super.dispose();
+  }
+
+  Future<void> _startListening() async {
+    print('[VoiceEmergency] Sheet: starting to listen...');
+    setState(() {
+      _isListening = true;
+      _hasResult = false;
+      _recognizedText = '';
+    });
+    await widget.voiceService.startListening(
+      onResult: (text, isFinal) {
+        if (mounted) {
+          setState(() {
+            _recognizedText = text;
+            if (isFinal) {
+              print('[VoiceEmergency] Sheet: final result received: "$text"');
+              _isListening = false;
+              _hasResult = text.trim().isNotEmpty;
+            }
+          });
+        }
+      },
+      onStatusChange: (status) {
+        // The speech recognizer reports 'notListening' or 'done' when it
+        // stops (timeout, silence, or error). Use this to flip the mic UI.
+        if (mounted && (status == 'notListening' || status == 'done')) {
+          print('[VoiceEmergency] Sheet: status → $status, stopping mic UI');
+          setState(() {
+            _isListening = false;
+            _hasResult = _recognizedText.trim().isNotEmpty;
+          });
+        }
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 80),
+      decoration: BoxDecoration(
+        color: AppTheme.bgPrimary.withValues(alpha: 0.95),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(
+            color: AppTheme.accentPurple.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Title
+            Text(
+              'VOICE EMERGENCY',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _isListening
+                  ? 'Describe your emergency...'
+                  : _hasResult
+                      ? 'Review your description'
+                      : 'Tap the mic to start again',
+              style: GoogleFonts.inter(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // Animated mic indicator
+            AnimatedBuilder(
+              animation: _pulseCtrl,
+              builder: (context, child) {
+                final scale = _isListening ? 1.0 + _pulseCtrl.value * 0.12 : 1.0;
+                final glowOpacity = _isListening ? 0.15 + _pulseCtrl.value * 0.15 : 0.0;
+                return Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      if (_isListening)
+                        BoxShadow(
+                          color: AppTheme.accentPurple.withValues(alpha: glowOpacity),
+                          blurRadius: 40,
+                          spreadRadius: 10,
+                        ),
+                    ],
+                  ),
+                  child: Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: _isListening
+                              ? [AppTheme.accentPurple, const Color(0xFF5B21B6)]
+                              : [
+                                  AppTheme.surfaceCard,
+                                  AppTheme.surfaceCard.withValues(alpha: 0.7),
+                                ],
+                        ),
+                        border: Border.all(
+                          color: _isListening
+                              ? AppTheme.accentPurple.withValues(alpha: 0.5)
+                              : AppTheme.surfaceBorder,
+                          width: 2,
+                        ),
+                      ),
+                      child: Icon(
+                        _isListening ? Icons.mic : Icons.mic_off,
+                        color: _isListening ? Colors.white : AppTheme.textDisabled,
+                        size: 36,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+
+            // Recognized text display
+            Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(minHeight: 80),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceCard.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _isListening
+                      ? AppTheme.accentPurple.withValues(alpha: 0.3)
+                      : AppTheme.surfaceBorder,
+                ),
+              ),
+              child: _recognizedText.isEmpty
+                  ? Center(
+                      child: Text(
+                        _isListening
+                            ? 'Listening...'
+                            : 'No speech detected',
+                        style: GoogleFonts.inter(
+                          color: AppTheme.textDisabled,
+                          fontSize: 14,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    )
+                  : Text(
+                      _recognizedText,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 15,
+                        height: 1.5,
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 24),
+
+            // Action buttons
+            Row(
+              children: [
+                // Cancel
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      widget.voiceService.cancel();
+                      Navigator.pop(context);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.textSecondary,
+                      side: BorderSide(color: AppTheme.surfaceBorder),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      'CANCEL',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Retry / Process
+                if (!_isListening && !_hasResult)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _startListening,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accentPurple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.replay, size: 18),
+                      label: Text(
+                        'RETRY',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_isListening)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await widget.voiceService.stopListening();
+                        setState(() {
+                          _isListening = false;
+                          _hasResult = _recognizedText.trim().isNotEmpty;
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.stop_rounded, size: 18),
+                      label: Text(
+                        'STOP',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_hasResult && !_isListening)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () =>
+                          Navigator.pop(context, _recognizedText),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accentPurple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.check_rounded, size: 18),
+                      label: Text(
+                        'PROCESS',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
